@@ -14,16 +14,23 @@ public class playerMovement : NetworkBehaviour
     private bool isMoving = false;
     private bool wasMovingLastFrame = false;
     private bool facingRight = false;
-    public int theScore;
+
+    public int score;
+
+    public NetworkVariable<int> health = new NetworkVariable<int>( 3, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
     public void NetworkStart()
     {
-        theScore = 0;
+        score = 0;
     }
 
     public override void OnNetworkSpawn()
     {
-        //movementAnimator = this.GetComponent<Animator>();
+        //initializes health
+        if (IsServer)
+        {
+            health.Value = 3;
+        }
     }
 
     void Update()
@@ -96,6 +103,29 @@ public class playerMovement : NetworkBehaviour
         }
     }
 
+    //called by bullet when hit
+    public void TakeDamage(int amount)
+    {
+        if (!IsServer)
+        {
+            return;
+        }
+
+        health.Value = Mathf.Max(0, health.Value - amount);
+        Debug.Log($"Player {OwnerClientId} took {amount} damage. Health = {health.Value}");
+
+        if (health.Value <= 0)
+        {
+            Die();
+        }
+    }
+
+    private void Die()
+    {
+        Debug.Log($"Player {OwnerClientId} died.");
+    }
+
+
     [ServerRpc(RequireOwnership = false)]
     public void scoreCollectedServerRpc(ulong clientId)
     {
@@ -110,16 +140,12 @@ public class playerMovement : NetworkBehaviour
         //get the TargetClientID, compare it to the owner id and if the same update the score
         if (targetClientId == OwnerClientId)
         {
-            //theClientObject = this.gameObject;
 
-            NetworkManager.Singleton.ConnectedClients[OwnerClientId].PlayerObject.GetComponent
-            <playerMovement>().theScore =
-            NetworkManager.Singleton.ConnectedClients[OwnerClientId].PlayerObject.GetComponent
-            <playerMovement>().theScore + 1;
+
+            NetworkManager.Singleton.ConnectedClients[OwnerClientId].PlayerObject.GetComponent <playerMovement>().score =
+            NetworkManager.Singleton.ConnectedClients[OwnerClientId].PlayerObject.GetComponent <playerMovement>().score + 1;
         }
-        Debug.Log("the score of player " + targetClientId + " is " +
-        NetworkManager.Singleton.ConnectedClients[OwnerClientId].PlayerObject.GetComponent
-        <playerMovement>().theScore);
+        Debug.Log("the score of player " + targetClientId + " is " + NetworkManager.Singleton.ConnectedClients[OwnerClientId].PlayerObject.GetComponent<playerMovement>().score);
     }
 
     [ServerRpc]
@@ -132,9 +158,11 @@ public class playerMovement : NetworkBehaviour
         {
             offsetX *= -1;
         }
-
         GameObject spawnedObject = Instantiate(spawnedObjectTransform, new Vector3(positionx + offsetX, positiony - offsetY, positionz), vector3rotation).gameObject;
      
+        Bullet bullet = spawnedObject.GetComponent<Bullet>();
+        bullet.OwnerClientId = OwnerClientId;
+
         spawnedObject.GetComponent<Bullet>().SetDirection(facingRight ? Vector3.left : Vector3.right);
         spawnedObject.GetComponent<NetworkObject>().Spawn(true);
     }

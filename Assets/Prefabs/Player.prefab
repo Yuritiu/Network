@@ -361,7 +361,9 @@ MonoBehaviour:
   movementAnimator: {fileID: 2088164525700883611}
   spawnedObjectTransform: {fileID: 6113770985130114832, guid: 88fb9e4d40003b541a695de8f47df451, type: 3}
   speed: 5
-  theScore: 0
+  score: 0
+  health:
+    m_InternalValue: 3
 --- !u!114 &8170638166095644923
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -420,6 +422,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   playerCamera: {fileID: 1692671318577658802}
+  audioListener: {fileID: 3265079349364583154}
   playerCanvas: {fileID: 2750537785098146963}
   screenBackground: {fileID: 417805567119683923}
 --- !u!1 &7469682080638948594
