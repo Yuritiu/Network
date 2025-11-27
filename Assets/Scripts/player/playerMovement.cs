@@ -6,6 +6,7 @@ using Unity.Netcode;
 public class playerMovement : NetworkBehaviour
 {
     [SerializeField] private Animator movementAnimator;
+    [SerializeField] private Transform playerSprite;
     //[SerializeField] private SpriteRenderer sprite;
 
     public GameObject spawnedObjectTransform;
@@ -15,9 +16,22 @@ public class playerMovement : NetworkBehaviour
     private bool wasMovingLastFrame = false;
     private bool facingRight = false;
 
+    private Rigidbody rb;
+
+    [SerializeField] private float jumpForce;
+    [SerializeField] private int maxJumps;   //double jump
+    
+    private int jumpsRemaining;
+    private bool isGrounded = true;
+    private int groundContacts = 0;
+
+    [SerializeField] private float coyoteTime;  // 150ms grace to jump
+    private float coyoteTimer = 0f;
+
     public int score;
 
     public NetworkVariable<int> health = new NetworkVariable<int>( 3, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    private NetworkVariable<bool> facingRightNet = new NetworkVariable<bool>(true, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
 
     public void NetworkStart()
     {
@@ -31,6 +45,13 @@ public class playerMovement : NetworkBehaviour
         {
             health.Value = 3;
         }
+
+        rb = GetComponent<Rigidbody>();
+        jumpsRemaining = maxJumps;
+
+        facingRightNet.OnValueChanged += OnFacingChanged;
+        // apply current value for late joiners / spawn
+        OnFacingChanged(false, facingRightNet.Value);
     }
 
     void Update()
@@ -38,6 +59,16 @@ public class playerMovement : NetworkBehaviour
         if (IsOwner)
         {
             isMoving = false;
+
+            // coyote timer
+            if (isGrounded)
+            {
+                coyoteTimer = coyoteTime; //reset timer while grounded
+            }
+            else
+            {
+                coyoteTimer -= Time.deltaTime; //count down after leaving ground
+            }
 
             if (Input.GetKey(KeyCode.RightArrow))
             {
@@ -53,9 +84,16 @@ public class playerMovement : NetworkBehaviour
                 movementAnimator.SetBool("IsRunning", true);
                 Flip(false);
             }
-            if (Input.GetKey(KeyCode.UpArrow))
+            if (Input.GetKeyDown(KeyCode.UpArrow) && (coyoteTimer > 0f || jumpsRemaining > 0))
             {
-                transform.position += new Vector3(0f, speed * Time.deltaTime, 0f);
+                if (rb != null)
+                {
+                    rb.velocity = new Vector3(rb.velocity.x, 0f, rb.velocity.z);
+                    rb.AddForce(Vector3.up * jumpForce, ForceMode.VelocityChange);
+                }
+
+                jumpsRemaining--;
+                isGrounded = false;
                 isMoving = true;
                 movementAnimator.SetBool("IsJump", true);
             }
@@ -83,23 +121,64 @@ public class playerMovement : NetworkBehaviour
     {
         if (target.gameObject.tag.Equals("Ground") == true)
         {
+            isGrounded = true;
+            jumpsRemaining = maxJumps;
             movementAnimator.SetBool("IsJump", false);
+        }
+    }
+
+    void OnCollisionStay(Collision collision)
+    {
+        if (!collision.gameObject.CompareTag("Ground"))
+            return;
+
+        foreach (var contact in collision.contacts)
+        {
+            if (contact.normal.y > 0.5f)
+            {
+                groundContacts++;
+                isGrounded = true;
+                jumpsRemaining = maxJumps;
+                movementAnimator.SetBool("IsJump", false);
+                break;
+            }
+        }
+    }
+
+    void OnCollisionExit(Collision collision)
+    {
+        if (!collision.gameObject.CompareTag("Ground"))
+            return;
+
+        groundContacts = Mathf.Max(0, groundContacts - 1);
+        if (groundContacts == 0)
+        {
+            isGrounded = false;
+        }
+    }
+
+    private void OnFacingChanged(bool oldValue, bool newValue)
+    {
+        if (playerSprite == null)
+        {
+            return;
+        }
+
+        if (newValue)
+        {
+            playerSprite.localScale = new Vector3(3f, 3f, 3f);    // facing right
+        }
+        else
+        {
+            playerSprite.localScale = new Vector3(-3f, 3f, 3f);    // facing left
         }
     }
 
     void Flip(bool Dir)
     {
-        if(Dir)
+        if (facingRightNet.Value != Dir)
         {
-            //sprite.flipX = false;
-            transform.localScale = new Vector3(1, 1, 1);
-            facingRight = false;
-        }
-        if(!Dir)
-        {
-            //sprite.flipX = true;
-            transform.localScale = new Vector3(-1, 1, 1);
-            facingRight = true;
+            facingRightNet.Value = Dir;   // this will trigger OnFacingChanged on all clients
         }
     }
 
