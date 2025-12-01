@@ -2,12 +2,18 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using Unity.Netcode;
+using UnityEngine.UI;
+using Unity.Collections;
 
 public class playerMovement : NetworkBehaviour
 {
     [SerializeField] private Animator movementAnimator;
     [SerializeField] private Transform playerSprite;
     //[SerializeField] private SpriteRenderer sprite;
+
+    [SerializeField] private Text nameText;
+
+    public string playerName = "Player";
 
     public GameObject spawnedObjectTransform;
     
@@ -40,7 +46,6 @@ public class playerMovement : NetworkBehaviour
 
     public override void OnNetworkSpawn()
     {
-        //initializes health
         if (IsServer)
         {
             health.Value = 3;
@@ -50,8 +55,39 @@ public class playerMovement : NetworkBehaviour
         jumpsRemaining = maxJumps;
 
         facingRightNet.OnValueChanged += OnFacingChanged;
-        // apply current value for late joiners / spawn
         OnFacingChanged(false, facingRightNet.Value);
+
+        // OWNER tells the server their name once
+        if (IsOwner)
+        {
+            string localName = MainMenuUI.LocalPlayerName;
+            if (string.IsNullOrWhiteSpace(localName))
+            {
+                localName = $"Player_{OwnerClientId}";
+            }
+
+            SubmitNameServerRpc(localName);
+        }
+
+        // no NetworkVariable name subscription now; just set whatever we currently have
+        if (!string.IsNullOrEmpty(playerName) && nameText != null)
+        {
+            nameText.text = playerName;
+        }
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        base.OnNetworkDespawn();
+        facingRightNet.OnValueChanged -= OnFacingChanged;
+    }
+
+    private void OnNameChanged(FixedString64Bytes oldName, FixedString64Bytes newName)
+    {
+        if (nameText != null)
+        {
+            nameText.text = newName.ToString();
+        }
     }
 
     void Update()
@@ -244,5 +280,31 @@ public class playerMovement : NetworkBehaviour
 
         spawnedObject.GetComponent<Bullet>().SetDirection(facingRight ? Vector3.left : Vector3.right);
         spawnedObject.GetComponent<NetworkObject>().Spawn(true);
+    }
+
+    [ServerRpc]
+    private void SubmitNameServerRpc(string name, ServerRpcParams rpcParams = default)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            name = $"Player_{OwnerClientId}";
+        }
+
+        // server stores the name on this player
+        playerName = name;
+
+        // broadcast to all clients so they update their local copy & UI
+        ApplyNameClientRpc(name);
+    }
+
+    [ClientRpc]
+    private void ApplyNameClientRpc(string name)
+    {
+        playerName = name;
+
+        if (nameText != null)
+        {
+            nameText.text = name;
+        }
     }
 }

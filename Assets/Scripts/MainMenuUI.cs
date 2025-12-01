@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -9,8 +9,11 @@ public class MainMenuUI : MonoBehaviour
     [SerializeField] private string gameSceneName = "Network";
 
     [Header("UI References")]
-    [SerializeField] private Text hostCodeText;        // Text to show the host's code
     [SerializeField] private InputField clientCodeInput; // Input for client to type code
+
+    [SerializeField] private InputField nameInput;
+
+    public static string LocalPlayerName = "Player";
 
     public void OnHostClicked()
     {
@@ -22,14 +25,11 @@ public class MainMenuUI : MonoBehaviour
             return;
         }
 
+        SetLocalNameFromInput();
+
         // generate and set host join code
         JoinCodeManager.Instance.GenerateAndSetHostCode();
         string code = JoinCodeManager.Instance.CurrentJoinCode;
-
-        if (hostCodeText != null)
-        {
-            hostCodeText.text = $"Join Code: {code}";
-        }
 
         // host usually doesn't need to send connectionData for itself
         nm.NetworkConfig.ConnectionData = Encoding.UTF8.GetBytes(code);
@@ -47,21 +47,23 @@ public class MainMenuUI : MonoBehaviour
 
     public void OnClientClicked()
     {
-        var nm = NetworkManager.Singleton;
+        NetworkManager nm = NetworkManager.Singleton;
         if (nm == null)
         {
             Debug.LogError("MainMenuUI: No NetworkManager found.");
             return;
         }
 
+        SetLocalNameFromInput();
+
         string code = clientCodeInput != null ? clientCodeInput.text : "";
+
         if (string.IsNullOrWhiteSpace(code) || code.Length != 6)
         {
             Debug.LogWarning("[MainMenuUI] Invalid join code entered.");
             return;
         }
 
-        // set the code to send with the connection request
         nm.NetworkConfig.ConnectionData = Encoding.UTF8.GetBytes(code);
 
         if (nm.StartClient())
@@ -71,6 +73,19 @@ public class MainMenuUI : MonoBehaviour
         else
         {
             Debug.LogError("[MainMenuUI] Failed to start client.");
+        }
+    }
+
+    private void SetLocalNameFromInput()
+    {
+        if (nameInput != null && !string.IsNullOrWhiteSpace(nameInput.text))
+        {
+            LocalPlayerName = nameInput.text;
+        }
+        else
+        {
+            // fallback
+            LocalPlayerName = $"Player_{Random.Range(1000, 9999)}";
         }
     }
 
