@@ -1,6 +1,4 @@
 using System;
-using System.Collections;
-using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -9,18 +7,13 @@ public class Bullet : NetworkBehaviour
     [Header("Movement")]
     public float projectileSpeed = 5f;
     private Vector3 moveDirection;
-    private Rigidbody rb;
 
     [Header("Lifetime")]
-    public float maxLifetime = 3f; //time before it deletes
+    public float maxLifetime = 3f; // time before it deletes
     private float lifeTimer = 0f;
+    private bool hasHit = false;
 
     public ulong OwnerClientId;
-
-    private void Awake()
-    {
-        rb = GetComponent<Rigidbody>();
-    }
 
     public void SetDirection(Vector3 dir)
     {
@@ -30,54 +23,49 @@ public class Bullet : NetworkBehaviour
     private void Update()
     {
         if (!IsServer)
-        {
             return;
-        }
 
+        // lifetime
         lifeTimer += Time.deltaTime;
         if (lifeTimer >= maxLifetime)
         {
-            DespawnBullet();
-        }
-    }
-
-    private void FixedUpdate()
-    {
-        if (!IsServer)
-        {
+            ServerDespawn();
             return;
         }
 
+        // move in a straight line
         if (moveDirection != Vector3.zero)
         {
-            rb.velocity = moveDirection * projectileSpeed;
+            transform.position += moveDirection * projectileSpeed * Time.deltaTime;
         }
     }
 
-    void OnCollisionEnter(Collision collision)
+    private void OnTriggerEnter(Collider other)
     {
-        if (!IsServer)
+        if (!IsServer) return;
+        if (hasHit) return;
+
+        hasHit = true;
+
+        // Did we hit a player?
+        var player = other.GetComponentInParent<playerMovement>();
+        if (player != null && player.OwnerClientId != OwnerClientId)
         {
-            return;
+            // just damage, NO knockback
+            player.TakeDamage(1);
         }
 
-        //checks if a player has been hit
-        playerMovement player = collision.gameObject.GetComponent<playerMovement>();
-        
-        if (player != null)
-        {
-            if (player.OwnerClientId != OwnerClientId)
-            {
-                player.TakeDamage(1);
-            }
-        }
-
-        DespawnBullet();
+        // Whether it's a player or wall/anything, despawn the bullet
+        ServerDespawn();
     }
 
-    private void DespawnBullet()
+    private void ServerDespawn()
     {
-        GetComponent<NetworkObject>().Despawn(true);
-        Destroy(this);
+        if (IsServer && TryGetComponent<NetworkObject>(out var netObj))
+        {
+            netObj.Despawn();
+        }
+
+        Destroy(gameObject);
     }
 }

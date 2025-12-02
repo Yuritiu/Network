@@ -7,74 +7,99 @@ using UnityEngine.UI;
 public class MainMenuUI : MonoBehaviour
 {
     [SerializeField] private string gameSceneName = "Network";
-
-    [Header("UI References")]
     [SerializeField] private InputField clientCodeInput; // Input for client to type code
-
     [SerializeField] private InputField nameInput;
-
     public static string LocalPlayerName = "Player";
 
-    public void OnHostClicked()
+    public async void OnHostClicked()
     {
         NetworkManager nm = NetworkManager.Singleton;
-        
+
         if (nm == null)
         {
             Debug.LogError("MainMenuUI: No NetworkManager found.");
             return;
+        }
+
+        if (nm.IsListening)
+        {
+            nm.Shutdown();
         }
 
         SetLocalNameFromInput();
 
-        // generate and set host join code
-        JoinCodeManager.Instance.GenerateAndSetHostCode();
-        string code = JoinCodeManager.Instance.CurrentJoinCode;
-
-        // host usually doesn't need to send connectionData for itself
-        nm.NetworkConfig.ConnectionData = Encoding.UTF8.GetBytes(code);
-
-        if (nm.StartHost())
+        try
         {
-            Debug.Log("[MainMenuUI] Host started, loading game scene...");
+            // Ask Relay to create an allocation and start the host
+            string relayJoinCode = await RelayManager.StartHostWithRelayAsync(maxConnections: 3);
+
+            if (string.IsNullOrEmpty(relayJoinCode))
+            {
+                Debug.LogError("[MainMenuUI] Failed to start host with Relay (join code is null/empty).");
+                return;
+            }
+
+            // Store it globally
+            if (JoinCodeManager.Instance != null)
+            {
+                JoinCodeManager.Instance.SetCurrentCode(relayJoinCode);
+            }
+
+            Debug.Log($"[MainMenuUI] Host started with Relay. Join code: {relayJoinCode}");
+
+            // Load game scene
             nm.SceneManager.LoadScene(gameSceneName, LoadSceneMode.Single);
         }
-        else
+        catch (System.Exception e)
         {
-            Debug.LogError("[MainMenuUI] Failed to start host.");
+            Debug.LogError("[MainMenuUI] Exception while starting host with Relay: " + e);
         }
     }
 
-    public void OnClientClicked()
+    public async void OnClientClicked()
     {
         NetworkManager nm = NetworkManager.Singleton;
         if (nm == null)
         {
             Debug.LogError("MainMenuUI: No NetworkManager found.");
             return;
+        }
+
+        if (nm.IsListening)
+        {
+            nm.Shutdown();
         }
 
         SetLocalNameFromInput();
 
         string code = clientCodeInput != null ? clientCodeInput.text : "";
+        code = code.Trim().ToUpperInvariant();
 
-        if (string.IsNullOrWhiteSpace(code) || code.Length != 6)
+        if (string.IsNullOrEmpty(code))
         {
-            Debug.LogWarning("[MainMenuUI] Invalid join code entered.");
+            Debug.LogWarning("[MainMenuUI] No join code entered.");
             return;
         }
-
-        nm.NetworkConfig.ConnectionData = Encoding.UTF8.GetBytes(code);
-
-        if (nm.StartClient())
+        
+        try
         {
-            Debug.Log($"[MainMenuUI] Client started with join code {code}, waiting for approval...");
+            bool success = await RelayManager.StartClientWithRelayAsync(code);
+
+            if (success)
+            {
+                Debug.Log($"[MainMenuUI] Client started with Relay, join code {code}");
+            }
+            else
+            {
+                Debug.LogError("[MainMenuUI] Failed to start client with Relay.");
+            }
         }
-        else
+        catch (System.Exception e)
         {
-            Debug.LogError("[MainMenuUI] Failed to start client.");
+            Debug.LogError("[MainMenuUI] Exception while starting client with Relay: " + e);
         }
     }
+
 
     private void SetLocalNameFromInput()
     {

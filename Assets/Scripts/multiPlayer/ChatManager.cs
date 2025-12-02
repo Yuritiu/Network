@@ -9,12 +9,45 @@ public class ChatManager : NetworkBehaviour
     [SerializeField] private Text chatLog;
     [SerializeField] private ScrollRect chatScrollRect;
 
+    // UI root object for the chat (scroll view + log)
+    [SerializeField] private GameObject chatContainer;
+
+    // How long before chat auto-hides
+    [SerializeField] private float hideDelay = 4f;
+
+    private float hideTimer = 0f;
+    private bool chatVisible = false;   // start hidden
+
     private void Start()
     {
         if (chatInput != null)
         {
-            // submit when pressing Enter
+            // submit message when enter is pressed
             chatInput.onEndEdit.AddListener(OnChatInputEndEdit);
+
+            // show chat when player starts typing in the input box
+            chatInput.onValueChanged.AddListener(OnChatInputValueChanged);
+        }
+
+        // start hidden
+        if (chatContainer != null)
+        {
+            chatContainer.SetActive(false);
+        }
+    }
+
+    private void Update()
+    {
+        if (!chatVisible)
+            return;
+
+        if (hideTimer > 0f)
+        {
+            hideTimer -= Time.deltaTime;
+            if (hideTimer <= 0f)
+            {
+                HideChat();
+            }
         }
     }
 
@@ -23,12 +56,13 @@ public class ChatManager : NetworkBehaviour
         if (chatInput != null)
         {
             chatInput.onEndEdit.RemoveListener(OnChatInputEndEdit);
+            chatInput.onValueChanged.RemoveListener(OnChatInputValueChanged);
         }
     }
 
     private void OnChatInputEndEdit(string text)
     {
-        // This fires when you press Enter or remove focus
+        // this runs when you press enter or remove focus
         if (!Input.GetKeyDown(KeyCode.Return) && !Input.GetKeyDown(KeyCode.KeypadEnter))
             return;
 
@@ -38,9 +72,15 @@ public class ChatManager : NetworkBehaviour
         // send to server
         SendChatMessageServerRpc(text.Trim());
 
-        // clear local input and refocus
+        // clear local input
         chatInput.text = "";
         chatInput.ActivateInputField();
+    }
+
+    // called whenever the text in the input box changes (i.e. user starts typing)
+    private void OnChatInputValueChanged(string _)
+    {
+        ShowChat();
     }
 
     [ServerRpc(RequireOwnership = false)]
@@ -73,6 +113,7 @@ public class ChatManager : NetworkBehaviour
         }
 
         Debug.Log($"[Chat] {line}");
+        ShowChat();   // chat also appears / refreshes when a message arrives
     }
 
     private string GetPlayerName(ulong clientId)
@@ -88,5 +129,24 @@ public class ChatManager : NetworkBehaviour
         }
 
         return $"Player_{clientId}";
+    }
+
+    private void ShowChat()
+    {
+        if (chatContainer != null)
+        {
+            chatContainer.SetActive(true);
+        }
+        chatVisible = true;
+        hideTimer = hideDelay;
+    }
+
+    private void HideChat()
+    {
+        if (chatContainer != null)
+        {
+            chatContainer.SetActive(false);
+        }
+        chatVisible = false;
     }
 }

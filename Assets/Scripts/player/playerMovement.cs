@@ -20,7 +20,7 @@ public class playerMovement : NetworkBehaviour
     public float speed = 5f;
     private bool isMoving = false;
     private bool wasMovingLastFrame = false;
-    private bool facingRight = false;
+    private bool facingLeft = false;
 
     private Rigidbody rb;
 
@@ -140,7 +140,7 @@ public class playerMovement : NetworkBehaviour
             }
             if (Input.GetKeyDown(KeyCode.R))
             {
-                createBulletShotFromClientServerRpc(transform.position.x, transform.position.y, transform.position.z, transform.rotation, facingRight);
+                createBulletShotFromClientServerRpc(transform.position.x, transform.position.y, transform.position.z, transform.rotation, facingLeft);
             }
 
 
@@ -203,10 +203,12 @@ public class playerMovement : NetworkBehaviour
         if (newValue)
         {
             playerSprite.localScale = new Vector3(3f, 3f, 3f);    // facing right
+            facingLeft = false;
         }
         else
         {
             playerSprite.localScale = new Vector3(-3f, 3f, 3f);    // facing left
+            facingLeft = true;
         }
     }
 
@@ -222,9 +224,7 @@ public class playerMovement : NetworkBehaviour
     public void TakeDamage(int amount)
     {
         if (!IsServer)
-        {
             return;
-        }
 
         health.Value = Mathf.Max(0, health.Value - amount);
         Debug.Log($"Player {OwnerClientId} took {amount} damage. Health = {health.Value}");
@@ -266,7 +266,7 @@ public class playerMovement : NetworkBehaviour
     [ServerRpc]
     private void createBulletShotFromClientServerRpc(float positionx, float positiony, float positionz, Quaternion vector3rotation, bool facingRight)
     {
-        float offsetX = 0.4f;
+        float offsetX = 0.6f;
         float offsetY = 0.2f;
 
         if(facingRight)
