@@ -6,6 +6,9 @@ TagManager:
   tags:
   - Ground
   - Coin
+  - Gravity
+  - Invisibility
+  - Shield
   layers:
   - Default
   - TransparentFX

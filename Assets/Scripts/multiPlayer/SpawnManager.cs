@@ -6,7 +6,7 @@ public class SpawnManager : NetworkBehaviour
 {
     public static SpawnManager Instance { get; private set; }
 
-    private readonly List<Transform> spawnPoints = new List<Transform>();
+    [SerializeField] private List<Transform> spawnPoints = new List<Transform>();
 
     private void Awake()
     {
@@ -18,17 +18,25 @@ public class SpawnManager : NetworkBehaviour
         Instance = this;
     }
 
-    public void RegisterSpawnPoint(Transform spawnPoint)
+    public override void OnNetworkSpawn()
     {
-        if (!spawnPoints.Contains(spawnPoint))
-        {
-            spawnPoints.Add(spawnPoint);
-        }
-    }
+        base.OnNetworkSpawn();
 
-    public void UnregisterSpawnPoint(Transform spawnPoint)
-    {
-        spawnPoints.Remove(spawnPoint);
+        if (!IsServer)
+            return;
+
+        // When the Network scene is loaded as a network scene, reposition all current players.
+        foreach (var client in NetworkManager.Singleton.ConnectedClientsList)
+        {
+            var player = client.PlayerObject != null
+                ? client.PlayerObject.GetComponent<playerManager>()
+                : null;
+
+            if (player != null)
+            {
+                player.transform.position = GetSpawnPosition();
+            }
+        }
     }
 
     public Vector3 GetSpawnPosition()

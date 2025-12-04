@@ -116,7 +116,7 @@ public class MainMenuUI : MonoBehaviour
 
     public void OnQuitClicked()
     {
-        Debug.Log("[MainMenuUI] Quit pressed.");
+        //Debug.Log("[MainMenuUI] Quit pressed.");
    
         Application.Quit();
     }
