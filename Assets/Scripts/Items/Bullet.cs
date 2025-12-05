@@ -48,7 +48,7 @@ public class Bullet : NetworkBehaviour
         hasHit = true;
 
         // Did we hit a player?
-        var player = other.GetComponentInParent<playerMovement>();
+        var player = other.GetComponentInParent<playerManager>();
         if (player != null && player.OwnerClientId != OwnerClientId)
         {
             // just damage, NO knockback

@@ -121,7 +121,7 @@ public class ChatManager : NetworkBehaviour
         if (NetworkManager.Singleton != null &&
             NetworkManager.Singleton.ConnectedClients.TryGetValue(clientId, out var client))
         {
-            playerMovement pm = client.PlayerObject.GetComponent<playerMovement>();
+            playerManager pm = client.PlayerObject.GetComponent<playerManager>();
             if (pm != null && !string.IsNullOrWhiteSpace(pm.playerName))
             {
                 return pm.playerName;

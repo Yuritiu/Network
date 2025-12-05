@@ -5,18 +5,19 @@ using Unity.Netcode;
 using UnityEngine.UI;
 using Unity.Collections;
 
-public class playerMovement : NetworkBehaviour
+public class playerManager : NetworkBehaviour
 {
     [SerializeField] private Animator movementAnimator;
     [SerializeField] private Transform playerSprite;
-    //[SerializeField] private SpriteRenderer sprite;
+    [SerializeField] private GameObject playerSpriteGO;
+    [SerializeField] private GameObject Shield;
 
     [SerializeField] private Text nameText;
 
     public string playerName = "Player";
 
     public GameObject spawnedObjectTransform;
-    
+
     public float speed = 5f;
     private bool isMoving = false;
     private bool wasMovingLastFrame = false;
@@ -26,7 +27,7 @@ public class playerMovement : NetworkBehaviour
 
     [SerializeField] private float jumpForce;
     [SerializeField] private int maxJumps;   //double jump
-    
+
     private int jumpsRemaining;
     private bool isGrounded = true;
     private int groundContacts = 0;
@@ -35,9 +36,29 @@ public class playerMovement : NetworkBehaviour
     private float coyoteTimer = 0f;
 
     public int score;
+    private int maxHealth = 2;
+    private bool lowHealth = false;
 
-    public NetworkVariable<int> health = new NetworkVariable<int>( 3, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    public NetworkVariable<int> health = new NetworkVariable<int>(3, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    public NetworkVariable<bool> isDead = new NetworkVariable<bool>(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
     private NetworkVariable<bool> facingRightNet = new NetworkVariable<bool>(true, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+
+    [SerializeField] private GameObject deathScreenUI;
+
+    [SerializeField] private float shootCooldown = 1f;
+    private float shootTimer = 0f;
+
+    // Stats for leaderboard
+    public NetworkVariable<int> kills = new NetworkVariable<int>(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+    public NetworkVariable<int> deaths = new NetworkVariable<int>(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+    private bool hasShield = false;
+    private bool hasInvis = false;
+    private bool hasGravity = false;
+
+    private float baseDrag;
+    [SerializeField] private float lowGravityDrag;
 
     public void NetworkStart()
     {
@@ -48,16 +69,22 @@ public class playerMovement : NetworkBehaviour
     {
         if (IsServer)
         {
-            health.Value = 3;
+            // server decides health and (for late joiners) spawn position
+            health.Value = maxHealth;
+
+            if (SpawnManager.Instance != null)
+            {
+                transform.position = SpawnManager.Instance.GetSpawnPosition();
+            }
         }
 
         rb = GetComponent<Rigidbody>();
+        maxJumps = 1;
         jumpsRemaining = maxJumps;
 
         facingRightNet.OnValueChanged += OnFacingChanged;
         OnFacingChanged(false, facingRightNet.Value);
 
-        // OWNER tells the server their name once
         if (IsOwner)
         {
             string localName = MainMenuUI.LocalPlayerName;
@@ -69,10 +96,19 @@ public class playerMovement : NetworkBehaviour
             SubmitNameServerRpc(localName);
         }
 
-        // no NetworkVariable name subscription now; just set whatever we currently have
         if (!string.IsNullOrEmpty(playerName) && nameText != null)
         {
             nameText.text = playerName;
+        }
+
+        isDead.OnValueChanged += OnDeathStateChanged;
+        OnDeathStateChanged(false, isDead.Value);
+
+        lowGravityDrag = -1f;
+
+        if (rb != null)
+        {
+            baseDrag = rb.drag; // save original drag
         }
     }
 
@@ -80,6 +116,7 @@ public class playerMovement : NetworkBehaviour
     {
         base.OnNetworkDespawn();
         facingRightNet.OnValueChanged -= OnFacingChanged;
+        isDead.OnValueChanged -= OnDeathStateChanged;
     }
 
     private void OnNameChanged(FixedString64Bytes oldName, FixedString64Bytes newName)
@@ -94,7 +131,13 @@ public class playerMovement : NetworkBehaviour
     {
         if (IsOwner)
         {
+            if (isDead.Value)
+            {
+                return;
+            }
+
             isMoving = false;
+            shootTimer += Time.deltaTime;
 
             // coyote timer
             if (isGrounded)
@@ -138,8 +181,9 @@ public class playerMovement : NetworkBehaviour
                 transform.position -= new Vector3(0f, speed * Time.deltaTime, 0f);
                 isMoving = true;
             }
-            if (Input.GetKeyDown(KeyCode.R))
+            if (Input.GetKeyDown(KeyCode.R) && shootTimer >= shootCooldown)
             {
+                shootTimer = 0f;
                 createBulletShotFromClientServerRpc(transform.position.x, transform.position.y, transform.position.z, transform.rotation, facingLeft);
             }
 
@@ -161,6 +205,60 @@ public class playerMovement : NetworkBehaviour
             jumpsRemaining = maxJumps;
             movementAnimator.SetBool("IsJump", false);
         }
+
+        if (!IsOwner)
+            return;
+
+        if (target.gameObject.tag.Equals("Gravity") == true)
+        {
+            hasGravity = true;
+            if (rb != null)
+            {
+                rb.drag = lowGravityDrag;
+            }
+            StartCoroutine(GravityTimer());
+        }
+        if (target.gameObject.tag.Equals("Invisibility") == true)
+        {
+            hasInvis = true;
+            playerSpriteGO.GetComponent<Renderer>().material.color = new Color(1, 1, 1, 0.2f);
+            StartCoroutine(InvisTimer());
+        }
+        if (target.gameObject.tag.Equals("Shield") == true)
+        {
+            hasShield = true;
+            ShieldSpriteServerRpc(true);
+            StartCoroutine(ShieldTimer());
+        }
+    }
+
+    IEnumerator GravityTimer()
+    {
+        yield return new WaitForSeconds(5);
+        if (rb != null)
+        {
+            rb.drag = baseDrag;
+        }
+        hasGravity = false;
+    }
+    IEnumerator InvisTimer()
+    {
+        yield return new WaitForSeconds(5);
+        hasInvis = false;
+        if (lowHealth)
+        {
+            LowHealthServerRpc();
+        }
+        else
+        {
+            playerSpriteGO.GetComponent<Renderer>().material.color = new Color(1, 1, 1, 1);
+        }
+    }
+    IEnumerator ShieldTimer()
+    {
+        yield return new WaitForSeconds(10);
+        hasShield = false;
+        ShieldSpriteServerRpc(false);
     }
 
     void OnCollisionStay(Collision collision)
@@ -172,10 +270,14 @@ public class playerMovement : NetworkBehaviour
         {
             if (contact.normal.y > 0.5f)
             {
-                groundContacts++;
                 isGrounded = true;
                 jumpsRemaining = maxJumps;
-                movementAnimator.SetBool("IsJump", false);
+
+                if (rb != null && rb.velocity.y <= 0.05f)
+                {
+                    movementAnimator.SetBool("IsJump", false);
+                }
+
                 break;
             }
         }
@@ -221,25 +323,104 @@ public class playerMovement : NetworkBehaviour
     }
 
     //called by bullet when hit
-    public void TakeDamage(int amount)
+    public void TakeDamage(int amount, ulong attackerClientId = ulong.MaxValue)
     {
         if (!IsServer)
+        {
             return;
+        }
+        if (hasShield)
+        {
+            hasShield = false;
+            ShieldSpriteServerRpc(false);
+            return;
+        }
 
         health.Value = Mathf.Max(0, health.Value - amount);
         Debug.Log($"Player {OwnerClientId} took {amount} damage. Health = {health.Value}");
 
+        if (health.Value == 1)
+        {
+            LowHealthServerRpc();
+            lowHealth = true;
+        }
+
         if (health.Value <= 0)
         {
+            // Count deaths for this player
+            deaths.Value++;
+
+            // Count kill for attacker (if it's a valid other player)
+            if (attackerClientId != ulong.MaxValue && attackerClientId != OwnerClientId)
+            {
+                if (NetworkManager.Singleton.ConnectedClients.TryGetValue(attackerClientId, out var attackerClient))
+                {
+                    playerManager attackerPm = attackerClient.PlayerObject.GetComponent<playerManager>();
+                    if (attackerPm != null)
+                    {
+                        attackerPm.kills.Value++;
+                        Debug.Log($"Player {attackerClientId} scored a kill. Total kills = {attackerPm.kills.Value}");
+                    }
+                }
+            }
+
             Die();
         }
     }
 
     private void Die()
     {
-        Debug.Log($"Player {OwnerClientId} died.");
+        if (isDead.Value)
+            return;
+
+        isDead.Value = true;
+
+        if (rb != null)
+        {
+            rb.velocity = Vector3.zero;
+        }
     }
 
+    private void OnDeathStateChanged(bool oldValue, bool newValue)
+    {
+        if (newValue)
+        {
+            // became dead
+            movementAnimator.SetBool("IsRunning", false);
+            movementAnimator.SetBool("IsJump", false);
+
+            // only the local owner sees their death screen
+            if (IsOwner && deathScreenUI != null)
+            {
+                deathScreenUI.SetActive(true);
+            }
+            if (playerSpriteGO != null)
+            {
+                playerSpriteGO.SetActive(false);
+            }
+        }
+        else
+        {
+            // respawned
+            if (IsOwner && deathScreenUI != null)
+            {
+                deathScreenUI.SetActive(false);
+            }
+            if (playerSpriteGO != null)
+            {
+                playerSpriteGO.SetActive(true);
+            }
+            lowHealth = false;
+        }
+    }
+
+    public void OnRespawnButtonPressed()
+    {
+        if (!IsOwner)
+            return;
+
+        RequestRespawnServerRpc();
+    }
 
     [ServerRpc(RequireOwnership = false)]
     public void scoreCollectedServerRpc(ulong clientId)
@@ -247,7 +428,6 @@ public class playerMovement : NetworkBehaviour
         //request the players to send all their scores
         coinCollectedClientRpc(clientId);
     }
-
 
     [ClientRpc]
     private void coinCollectedClientRpc(ulong targetClientId)
@@ -257,10 +437,10 @@ public class playerMovement : NetworkBehaviour
         {
 
 
-            NetworkManager.Singleton.ConnectedClients[OwnerClientId].PlayerObject.GetComponent <playerMovement>().score =
-            NetworkManager.Singleton.ConnectedClients[OwnerClientId].PlayerObject.GetComponent <playerMovement>().score + 1;
+            NetworkManager.Singleton.ConnectedClients[OwnerClientId].PlayerObject.GetComponent<playerManager>().score =
+            NetworkManager.Singleton.ConnectedClients[OwnerClientId].PlayerObject.GetComponent<playerManager>().score + 1;
         }
-        Debug.Log("the score of player " + targetClientId + " is " + NetworkManager.Singleton.ConnectedClients[OwnerClientId].PlayerObject.GetComponent<playerMovement>().score);
+        Debug.Log("the score of player " + targetClientId + " is " + NetworkManager.Singleton.ConnectedClients[OwnerClientId].PlayerObject.GetComponent<playerManager>().score);
     }
 
     [ServerRpc]
@@ -269,12 +449,12 @@ public class playerMovement : NetworkBehaviour
         float offsetX = 0.6f;
         float offsetY = 0.2f;
 
-        if(facingRight)
+        if (facingRight)
         {
             offsetX *= -1;
         }
         GameObject spawnedObject = Instantiate(spawnedObjectTransform, new Vector3(positionx + offsetX, positiony - offsetY, positionz), vector3rotation).gameObject;
-     
+
         Bullet bullet = spawnedObject.GetComponent<Bullet>();
         bullet.OwnerClientId = OwnerClientId;
 
@@ -306,5 +486,49 @@ public class playerMovement : NetworkBehaviour
         {
             nameText.text = name;
         }
+    }
+
+    [ServerRpc]
+    private void RequestRespawnServerRpc(ServerRpcParams rpcParams = default)
+    {
+        if (!isDead.Value)
+            return; // ignore if somehow not dead
+
+        // choose spawn position
+        Vector3 spawnPos = Vector3.zero;
+        if (SpawnManager.Instance != null)
+        {
+            spawnPos = SpawnManager.Instance.GetSpawnPosition();
+        }
+
+        playerSpriteGO.GetComponent<Renderer>().material.color = new Color(1, 1, 1);
+
+        transform.position = spawnPos;
+        health.Value = maxHealth;
+        isDead.Value = false;
+    }
+
+    [ServerRpc]
+    private void LowHealthServerRpc()
+    {
+        LowHealthClientRpc();
+    }
+
+    [ClientRpc]
+    private void LowHealthClientRpc()
+    {
+        playerSpriteGO.GetComponent<Renderer>().material.color = new Color(1, 0.65f, 0.65f);
+    }
+
+    [ServerRpc]
+    private void ShieldSpriteServerRpc(bool isActive)
+    {
+        ShieldSpriteClientRpc(isActive);
+    }
+
+    [ClientRpc]
+    private void ShieldSpriteClientRpc(bool isActive)
+    {
+        Shield.SetActive(isActive);
     }
 }
