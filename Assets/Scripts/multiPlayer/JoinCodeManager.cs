@@ -4,6 +4,7 @@ public class JoinCodeManager : MonoBehaviour
 {
     public static JoinCodeManager Instance { get; private set; }
 
+    // Relay join code currently in use (host only really cares about this)
     public string CurrentJoinCode { get; private set; } = "";
 
     private void Awake()
@@ -18,6 +19,7 @@ public class JoinCodeManager : MonoBehaviour
         DontDestroyOnLoad(gameObject);
     }
 
+    // Called from MainMenuUI after Relay gives us the join code
     public void SetCurrentCode(string code)
     {
         CurrentJoinCode = code;

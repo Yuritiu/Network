@@ -7,22 +7,27 @@ using UnityEngine.UI;
 public class MainMenuUI : MonoBehaviour
 {
     [SerializeField] private string gameSceneName = "Network";
+
+    [Header("UI")]
     [SerializeField] private InputField clientCodeInput; // Input for client to type code
     [SerializeField] private InputField nameInput;
+
     public static string LocalPlayerName = "Player";
 
     public async void OnHostClicked()
     {
-        NetworkManager nm = NetworkManager.Singleton;
+        var nm = NetworkManager.Singleton;
 
         if (nm == null)
         {
-            Debug.LogError("MainMenuUI: No NetworkManager found.");
+            Debug.LogError("[MainMenuUI] No NetworkManager found in scene.");
             return;
         }
 
-        if (nm.IsListening)
+        // If something is already running (old session), shut it down first
+        if (nm.IsClient || nm.IsServer || nm.IsListening)
         {
+            Debug.Log("[MainMenuUI] Shutting down previous NetworkManager session before hosting.");
             nm.Shutdown();
         }
 
@@ -39,7 +44,7 @@ public class MainMenuUI : MonoBehaviour
                 return;
             }
 
-            // Store it globally
+            // Store it globally so HUD can display it
             if (JoinCodeManager.Instance != null)
             {
                 JoinCodeManager.Instance.SetCurrentCode(relayJoinCode);
@@ -47,7 +52,7 @@ public class MainMenuUI : MonoBehaviour
 
             Debug.Log($"[MainMenuUI] Host started with Relay. Join code: {relayJoinCode}");
 
-            // Load game scene
+            // 🔹 Let Netcode handle the scene load as a *networked* scene
             nm.SceneManager.LoadScene(gameSceneName, LoadSceneMode.Single);
         }
         catch (System.Exception e)
@@ -58,48 +63,51 @@ public class MainMenuUI : MonoBehaviour
 
     public async void OnClientClicked()
     {
-        NetworkManager nm = NetworkManager.Singleton;
+        var nm = NetworkManager.Singleton;
         if (nm == null)
         {
-            Debug.LogError("MainMenuUI: No NetworkManager found.");
+            Debug.LogError("[MainMenuUI] No NetworkManager found in scene.");
             return;
         }
 
-        if (nm.IsListening)
+        if (nm.IsClient || nm.IsServer || nm.IsListening)
         {
+            Debug.Log("[MainMenuUI] Shutting down previous NetworkManager session before joining.");
             nm.Shutdown();
         }
 
-        SetLocalNameFromInput();
-
-        string code = clientCodeInput != null ? clientCodeInput.text : "";
-        code = code.Trim().ToUpperInvariant();
+        string code = clientCodeInput != null
+            ? clientCodeInput.text.Trim().ToUpperInvariant()
+            : "";
 
         if (string.IsNullOrEmpty(code))
         {
             Debug.LogWarning("[MainMenuUI] No join code entered.");
             return;
         }
-        
+
+        SetLocalNameFromInput();
+
         try
         {
+            Debug.Log($"[MainMenuUI] Attempting to join via Relay with code: {code}");
             bool success = await RelayManager.StartClientWithRelayAsync(code);
-
             if (success)
             {
-                Debug.Log($"[MainMenuUI] Client started with Relay, join code {code}");
+                Debug.Log($"[MainMenuUI] Client started with Relay, join code {code}.");
+                // 🔹 Do NOT manually load scenes here.
+                // Host's SceneManager.LoadScene will move us once connection is established.
             }
             else
             {
-                Debug.LogError("[MainMenuUI] Failed to start client with Relay.");
+                Debug.LogError("[MainMenuUI] Failed to start client (StartClient returned false).");
             }
         }
         catch (System.Exception e)
         {
-            Debug.LogError("[MainMenuUI] Exception while starting client with Relay: " + e);
+            Debug.LogError("[MainMenuUI] Exception while joining via Relay: " + e);
         }
     }
-
 
     private void SetLocalNameFromInput()
     {
@@ -116,8 +124,6 @@ public class MainMenuUI : MonoBehaviour
 
     public void OnQuitClicked()
     {
-        //Debug.Log("[MainMenuUI] Quit pressed.");
-   
         Application.Quit();
     }
 }

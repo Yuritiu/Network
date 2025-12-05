@@ -221,7 +221,7 @@ public class playerManager : NetworkBehaviour
         if (target.gameObject.tag.Equals("Invisibility") == true)
         {
             hasInvis = true;
-            playerSpriteGO.GetComponent<Renderer>().material.color = new Color(1, 1, 1, 0.5f);
+            playerSpriteGO.GetComponent<Renderer>().material.color = new Color(1, 1, 1, 0.2f);
             StartCoroutine(InvisTimer());
         }
         if (target.gameObject.tag.Equals("Shield") == true)
@@ -249,10 +249,14 @@ public class playerManager : NetworkBehaviour
         {
             LowHealthServerRpc();
         }
+        else
+        {
+            playerSpriteGO.GetComponent<Renderer>().material.color = new Color(1, 1, 1, 1);
+        }
     }
     IEnumerator ShieldTimer()
     {
-        yield return new WaitForSeconds(5);
+        yield return new WaitForSeconds(10);
         hasShield = false;
         ShieldSpriteServerRpc(false);
     }
@@ -424,7 +428,6 @@ public class playerManager : NetworkBehaviour
         //request the players to send all their scores
         coinCollectedClientRpc(clientId);
     }
-
 
     [ClientRpc]
     private void coinCollectedClientRpc(ulong targetClientId)

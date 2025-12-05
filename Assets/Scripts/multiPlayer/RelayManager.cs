@@ -29,24 +29,16 @@ public static class RelayManager
         }
     }
 
-    /// <summary>
-    /// Create a Relay allocation and start NGO host.
-    /// Returns the Relay join code (string) if successful, null otherwise.
-    /// </summary>
     public static async Task<string> StartHostWithRelayAsync(int maxConnections)
     {
         await EnsureUnityServices();
 
-        // Create allocation on Relay (maxConnections = number of clients that can join)
         Allocation allocation = await RelayService.Instance.CreateAllocationAsync(maxConnections);
         string joinCode = await RelayService.Instance.GetJoinCodeAsync(allocation.AllocationId);
 
         Debug.Log($"[Relay] Host allocation created. Join code: {joinCode}");
 
-        // Configure UnityTransport to use Relay
         var utp = NetworkManager.Singleton.GetComponent<UnityTransport>();
-
-        // "dtls" = secure UDP; "udp" is also allowed but dtls is recommended
         var serverData = new RelayServerData(allocation, "dtls");
         utp.SetRelayServerData(serverData);
 
@@ -60,20 +52,14 @@ public static class RelayManager
         return joinCode;
     }
 
-    /// <summary>
-    /// Join an existing Relay allocation using its join code, and start NGO client.
-    /// Returns true if client started successfully.
-    /// </summary>
     public static async Task<bool> StartClientWithRelayAsync(string joinCode)
     {
         await EnsureUnityServices();
 
         Debug.Log($"[Relay] Joining Relay allocation with code: {joinCode}");
 
-        // Join allocation
         JoinAllocation joinAllocation = await RelayService.Instance.JoinAllocationAsync(joinCode);
 
-        // Configure UnityTransport
         var utp = NetworkManager.Singleton.GetComponent<UnityTransport>();
         var serverData = new RelayServerData(joinAllocation, "dtls");
         utp.SetRelayServerData(serverData);
