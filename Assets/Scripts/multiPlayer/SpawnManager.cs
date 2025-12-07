@@ -18,6 +18,27 @@ public class SpawnManager : NetworkBehaviour
         Instance = this;
     }
 
+    public override void OnNetworkSpawn()
+    {
+        base.OnNetworkSpawn();
+
+        if (!IsServer)
+            return;
+
+        // When the Network scene is loaded as a network scene, reposition all current players.
+        foreach (var client in NetworkManager.Singleton.ConnectedClientsList)
+        {
+            var player = client.PlayerObject != null
+                ? client.PlayerObject.GetComponent<playerManager>()
+                : null;
+
+            if (player != null)
+            {
+                player.transform.position = GetSpawnPosition();
+            }
+        }
+    }
+
     public void RegisterSpawnPoint(Transform spawnPoint)
     {
         if (!spawnPoints.Contains(spawnPoint))

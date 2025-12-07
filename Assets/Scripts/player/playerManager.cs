@@ -494,19 +494,41 @@ public class playerManager : NetworkBehaviour
         if (!isDead.Value)
             return; // ignore if somehow not dead
 
-        // choose spawn position
+        // server chooses spawn position
         Vector3 spawnPos = Vector3.zero;
         if (SpawnManager.Instance != null)
         {
             spawnPos = SpawnManager.Instance.GetSpawnPosition();
         }
 
-        playerSpriteGO.GetComponent<Renderer>().material.color = new Color(1, 1, 1);
-
-        transform.position = spawnPos;
         health.Value = maxHealth;
         isDead.Value = false;
+
+        // tell the owner client to move itself
+        RespawnClientRpc(spawnPos, new ClientRpcParams
+        {
+            Send = new ClientRpcSendParams
+            {
+                TargetClientIds = new[] { OwnerClientId }
+            }
+        });
     }
+
+    [ClientRpc]
+    private void RespawnClientRpc(Vector3 spawnPos, ClientRpcParams clientRpcParams = default)
+    {
+        transform.position = spawnPos;
+
+        if (playerSpriteGO != null)
+        {
+            var rend = playerSpriteGO.GetComponent<Renderer>();
+            if (rend != null)
+            {
+                rend.material.color = new Color(1, 1, 1, 1);
+            }
+        }
+    }
+
 
     [ServerRpc]
     private void LowHealthServerRpc()
