@@ -937,7 +937,7 @@ MonoBehaviour:
   - {fileID: 1129377022}
   - {fileID: 1017716122}
   - {fileID: 1720366727}
-  spawnMaxTimer: 1
+  spawnMaxTimer: 10
 --- !u!1 &490012807
 GameObject:
   m_ObjectHideFlags: 0
@@ -2770,6 +2770,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98c04ed65e9a2a24dbc470fefd91eecb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  spawnPoints:
+  - {fileID: 1070380499}
+  - {fileID: 806790889}
+  - {fileID: 1124967024}
+  - {fileID: 2064884}
 --- !u!114 &1612688614
 MonoBehaviour:
   m_ObjectHideFlags: 0

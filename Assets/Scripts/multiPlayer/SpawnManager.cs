@@ -6,7 +6,7 @@ public class SpawnManager : NetworkBehaviour
 {
     public static SpawnManager Instance { get; private set; }
 
-    private readonly List<Transform> spawnPoints = new List<Transform>();
+    [SerializeField] private List<Transform> spawnPoints = new List<Transform>();
 
     private void Awake()
     {
