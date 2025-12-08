@@ -12,6 +12,7 @@ public class PlayerView : NetworkBehaviour
     {
         bool isMine = IsOwner;
 
+        //enables camera
         if (playerCamera)
         {
             playerCamera.enabled = isMine;
@@ -21,14 +22,17 @@ public class PlayerView : NetworkBehaviour
             }
         }
 
+        //enables audio
         if (audioListener)
         {
             audioListener.enabled = isMine;
         }
+        //enables UI
         if (playerCanvas)
         {
             playerCanvas.enabled = isMine;
         }
+        //enables background
         if (screenBackground)
         {
             screenBackground.SetActive(isMine);

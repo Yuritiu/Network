@@ -7,19 +7,18 @@ using Unity.Collections;
 
 public class playerManager : NetworkBehaviour
 {
+    //Sprites
     [SerializeField] private Animator movementAnimator;
     [SerializeField] private Transform playerSprite;
     [SerializeField] private GameObject playerSpriteGO;
-    [SerializeField] private GameObject Shield;
 
-    private Coroutine shieldCoroutine;
-
+    //Name
     [SerializeField] private Text nameText;
-
     public string playerName = "Player";
 
-    public GameObject spawnedObjectTransform;
-
+    //movement
+    private NetworkVariable<bool> facingRightNet = new NetworkVariable<bool>(true, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+    
     public float speed = 5f;
     private bool isMoving = false;
     private bool wasMovingLastFrame = false;
@@ -28,39 +27,48 @@ public class playerManager : NetworkBehaviour
     private Rigidbody rb;
 
     [SerializeField] private float jumpForce;
-    [SerializeField] private int maxJumps;   //double jump
+    [SerializeField] private int maxJumps; //double jump
 
     private int jumpsRemaining;
     private bool isGrounded = true;
     private int groundContacts = 0;
 
-    [SerializeField] private float coyoteTime;  // 150ms grace to jump
+    [SerializeField] private float coyoteTime; // 150ms grace to jump
     private float coyoteTimer = 0f;
 
+    //health and death
+    [SerializeField] private GameObject deathScreenUI;
+    
     public int score;
     private int maxHealth = 2;
     private bool lowHealth = false;
 
     public NetworkVariable<int> health = new NetworkVariable<int>(3, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
     public NetworkVariable<bool> isDead = new NetworkVariable<bool>(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
-    private NetworkVariable<bool> facingRightNet = new NetworkVariable<bool>(true, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+    
 
-    [SerializeField] private GameObject deathScreenUI;
+
+    //Shooting varibles
+    public GameObject bullet;
 
     [SerializeField] private float shootCooldown = 1f;
     private float shootTimer = 0f;
 
-    // Stats for leaderboard
+    //stats for leaderboard
     public NetworkVariable<int> kills = new NetworkVariable<int>(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
-
     public NetworkVariable<int> deaths = new NetworkVariable<int>(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
+    //Power Ups
     private bool hasShield = false;
     private bool hasInvis = false;
     private bool hasGravity = false;
 
-    private float baseDrag;
+    [SerializeField] private GameObject Shield;
+    private Coroutine shieldCoroutine;
+
+    //slow fall varibles
     [SerializeField] private float lowGravityDrag;
+    private float baseDrag;
 
     public void NetworkStart()
     {
@@ -71,7 +79,7 @@ public class playerManager : NetworkBehaviour
     {
         if (IsServer)
         {
-            // server decides health and (for late joiners) spawn position
+            // server decides health and (for late clients) spawn position
             health.Value = maxHealth;
 
             if (SpawnManager.Instance != null)
@@ -84,39 +92,43 @@ public class playerManager : NetworkBehaviour
         maxJumps = 1;
         jumpsRemaining = maxJumps;
 
+        //ensures player is facing the right way
         facingRightNet.OnValueChanged += OnFacingChanged;
         OnFacingChanged(false, facingRightNet.Value);
 
         if (IsOwner)
         {
+            //sets name
             string localName = MainMenuUI.LocalPlayerName;
-            if (string.IsNullOrWhiteSpace(localName))
-            {
-                localName = $"Player_{OwnerClientId}";
-            }
 
             SubmitNameServerRpc(localName);
         }
 
         if (!string.IsNullOrEmpty(playerName) && nameText != null)
         {
+            //sets leaderboard name
             nameText.text = playerName;
         }
 
+        //sets death UI 
         isDead.OnValueChanged += OnDeathStateChanged;
         OnDeathStateChanged(false, isDead.Value);
 
+        //sets slow fall speed
         lowGravityDrag = -1f;
 
         if (rb != null)
         {
-            baseDrag = rb.drag; // save original drag
+            //save original drag
+            baseDrag = rb.drag; 
         }
     }
 
     public override void OnNetworkDespawn()
     {
+
         base.OnNetworkDespawn();
+        //stops player functions being called 
         facingRightNet.OnValueChanged -= OnFacingChanged;
         isDead.OnValueChanged -= OnDeathStateChanged;
     }
@@ -138,7 +150,10 @@ public class playerManager : NetworkBehaviour
                 return;
             }
 
+            //resets animation
             isMoving = false;
+
+            //countdown for shooting
             shootTimer += Time.deltaTime;
 
             // coyote timer
@@ -151,21 +166,24 @@ public class playerManager : NetworkBehaviour
                 coyoteTimer -= Time.deltaTime; //count down after leaving ground
             }
 
-            if (Input.GetKey(KeyCode.RightArrow))
+            //move right
+            if (Input.GetKey(KeyCode.D))
             {
                 transform.position += new Vector3(speed * Time.deltaTime, 0f, 0f);
                 isMoving = true;
                 movementAnimator.SetBool("IsRunning", true);
                 Flip(true);
             }
-            if (Input.GetKey(KeyCode.LeftArrow))
+            //move left
+            if (Input.GetKey(KeyCode.A))
             {
                 transform.position -= new Vector3(speed * Time.deltaTime, 0f, 0f);
                 isMoving = true;
                 movementAnimator.SetBool("IsRunning", true);
                 Flip(false);
             }
-            if (Input.GetKeyDown(KeyCode.UpArrow) && (coyoteTimer > 0f || jumpsRemaining > 0))
+            //jump
+            if (Input.GetKeyDown(KeyCode.W) && (coyoteTimer > 0f || jumpsRemaining > 0))
             {
                 if (rb != null)
                 {
@@ -178,29 +196,34 @@ public class playerManager : NetworkBehaviour
                 isMoving = true;
                 movementAnimator.SetBool("IsJump", true);
             }
-            if (Input.GetKey(KeyCode.DownArrow))
+            //move down
+            if (Input.GetKey(KeyCode.S))
             {
                 transform.position -= new Vector3(0f, speed * Time.deltaTime, 0f);
                 isMoving = true;
             }
-            if (Input.GetKeyDown(KeyCode.R) && shootTimer >= shootCooldown)
+            //shoot
+            if (Input.GetKeyDown(KeyCode.Space) && shootTimer >= shootCooldown)
             {
                 shootTimer = 0f;
                 createBulletShotFromClientServerRpc(transform.position.x, transform.position.y, transform.position.z, transform.rotation, facingLeft);
             }
 
 
+            //stops animation
             if (!isMoving && wasMovingLastFrame)
             {
                 movementAnimator.SetBool("IsRunning", false);
             }
 
+            //stops resetting the animation every tick
             wasMovingLastFrame = isMoving;
         }
     }
 
     void OnCollisionEnter(Collision target)
     {
+        //resets the jumps and animation
         if (target.gameObject.tag.Equals("Ground") == true)
         {
             isGrounded = true;
@@ -209,24 +232,28 @@ public class playerManager : NetworkBehaviour
         }
 
         if (!IsOwner)
+        {
             return;
+        }
 
+        //pickup gravity power
         if (target.gameObject.tag.Equals("Gravity") == true)
         {
             hasGravity = true;
             if (rb != null)
             {
+                //changed gravity
                 rb.drag = lowGravityDrag;
             }
             StartCoroutine(GravityTimer());
         }
+        //pickup invis power
         if (target.gameObject.tag.Equals("Invisibility") == true && IsOwner)
         {
-            //hasInvis = true;
-            //playerSpriteGO.GetComponent<Renderer>().material.color = new Color(1, 1, 1, 0.2f);
             StartCoroutine(InvisTimer());
 
         }
+        //pickup shield power
         if (target.gameObject.tag.Equals("Shield") == true)
         {
             PickupShieldServerRpc();
@@ -236,6 +263,7 @@ public class playerManager : NetworkBehaviour
     IEnumerator GravityTimer()
     {
         yield return new WaitForSeconds(5);
+        //resets gravity
         if (rb != null)
         {
             rb.drag = baseDrag;
@@ -244,10 +272,12 @@ public class playerManager : NetworkBehaviour
     }
     IEnumerator InvisTimer()
     {
+        //sets sprite alpha low
         SetInvisibleServerRpc(true);
 
         yield return new WaitForSeconds(5);
 
+        //resets alpha
         hasInvis = false;
         if (lowHealth)
         {
@@ -262,8 +292,11 @@ public class playerManager : NetworkBehaviour
     void OnCollisionStay(Collision collision)
     {
         if (!collision.gameObject.CompareTag("Ground"))
+        {
             return;
+        }
 
+        //adds more reliability to these variables
         foreach (var contact in collision.contacts)
         {
             if (contact.normal.y > 0.5f)
@@ -284,8 +317,11 @@ public class playerManager : NetworkBehaviour
     void OnCollisionExit(Collision collision)
     {
         if (!collision.gameObject.CompareTag("Ground"))
+        {
             return;
+        }
 
+        //update grounded state.
         groundContacts = Mathf.Max(0, groundContacts - 1);
         if (groundContacts == 0)
         {
@@ -302,12 +338,14 @@ public class playerManager : NetworkBehaviour
 
         if (newValue)
         {
-            playerSprite.localScale = new Vector3(3f, 3f, 3f);    // facing right
+            // facing right
+            playerSprite.localScale = new Vector3(3f, 3f, 3f);    
             facingLeft = false;
         }
         else
         {
-            playerSprite.localScale = new Vector3(-3f, 3f, 3f);    // facing left
+            // facing left
+            playerSprite.localScale = new Vector3(-3f, 3f, 3f);    
             facingLeft = true;
         }
     }
@@ -316,11 +354,12 @@ public class playerManager : NetworkBehaviour
     {
         if (facingRightNet.Value != Dir)
         {
-            facingRightNet.Value = Dir;   // this will trigger OnFacingChanged on all clients
+            //this will trigger OnFacingChanged on all clients
+            facingRightNet.Value = Dir;   
         }
     }
 
-    //called by bullet when hit
+    //called by bullet when player is hit
     public void TakeDamage(int amount, ulong attackerClientId = ulong.MaxValue)
     {
         if (!IsServer)
@@ -329,13 +368,13 @@ public class playerManager : NetworkBehaviour
         }
         if (hasShield)
         {
+            //shield stops damage
             hasShield = false;
             ShieldSpriteClientRpc(false);
             return;
         }
 
         health.Value = Mathf.Max(0, health.Value - amount);
-        Debug.Log($"Player {OwnerClientId} took {amount} damage. Health = {health.Value}");
 
         if (health.Value == 1)
         {
@@ -345,19 +384,18 @@ public class playerManager : NetworkBehaviour
 
         if (health.Value <= 0)
         {
-            // Count deaths for this player
+            //count deaths for this player
             deaths.Value++;
 
-            // Count kill for attacker (if it's a valid other player)
+            //count kill for attacker (if it's a valid other player)
             if (attackerClientId != ulong.MaxValue && attackerClientId != OwnerClientId)
             {
                 if (NetworkManager.Singleton.ConnectedClients.TryGetValue(attackerClientId, out var attackerClient))
                 {
-                    playerManager attackerPm = attackerClient.PlayerObject.GetComponent<playerManager>();
-                    if (attackerPm != null)
+                    playerManager attackerPlayerManager = attackerClient.PlayerObject.GetComponent<playerManager>();
+                    if (attackerPlayerManager != null)
                     {
-                        attackerPm.kills.Value++;
-                        Debug.Log($"Player {attackerClientId} scored a kill. Total kills = {attackerPm.kills.Value}");
+                        attackerPlayerManager.kills.Value++;
                     }
                 }
             }
@@ -368,11 +406,16 @@ public class playerManager : NetworkBehaviour
 
     private void Die()
     {
+        //ignore if already dead
         if (isDead.Value)
+        {
             return;
+        }
 
+        //mark player as dead
         isDead.Value = true;
 
+        //stop all movement
         if (rb != null)
         {
             rb.velocity = Vector3.zero;
@@ -383,7 +426,7 @@ public class playerManager : NetworkBehaviour
     {
         if (newValue)
         {
-            // became dead
+            // dead
             movementAnimator.SetBool("IsRunning", false);
             movementAnimator.SetBool("IsJump", false);
 
@@ -392,6 +435,8 @@ public class playerManager : NetworkBehaviour
             {
                 deathScreenUI.SetActive(true);
             }
+
+            //removes for all players
             if (playerSpriteGO != null)
             {
                 playerSpriteGO.SetActive(false);
@@ -400,10 +445,12 @@ public class playerManager : NetworkBehaviour
         else
         {
             // respawned
+            
             if (IsOwner && deathScreenUI != null)
             {
                 deathScreenUI.SetActive(false);
             }
+
             if (playerSpriteGO != null)
             {
                 playerSpriteGO.SetActive(true);
@@ -411,6 +458,7 @@ public class playerManager : NetworkBehaviour
                 var rend = playerSpriteGO.GetComponent<Renderer>();
                 if (rend != null)
                 {
+                    //removes red tint
                     rend.material.color = new Color(1f, 1f, 1f, 1f);
                 }
             }
@@ -421,7 +469,9 @@ public class playerManager : NetworkBehaviour
     public void OnRespawnButtonPressed()
     {
         if (!IsOwner)
+        { 
             return;
+        }
 
         RequestRespawnServerRpc();
     }
@@ -444,36 +494,38 @@ public class playerManager : NetworkBehaviour
             NetworkManager.Singleton.ConnectedClients[OwnerClientId].PlayerObject.GetComponent<playerManager>().score =
             NetworkManager.Singleton.ConnectedClients[OwnerClientId].PlayerObject.GetComponent<playerManager>().score + 1;
         }
-        Debug.Log("the score of player " + targetClientId + " is " + NetworkManager.Singleton.ConnectedClients[OwnerClientId].PlayerObject.GetComponent<playerManager>().score);
     }
 
     [ServerRpc]
     private void createBulletShotFromClientServerRpc(float positionx, float positiony, float positionz, Quaternion vector3rotation, bool facingRight)
     {
+        //apply small positional offsets for bullet spawn
         float offsetX = 0.6f;
         float offsetY = 0.2f;
 
+        //flip horizontal offset if facing right
         if (facingRight)
         {
             offsetX *= -1;
         }
-        GameObject spawnedObject = Instantiate(spawnedObjectTransform, new Vector3(positionx + offsetX, positiony - offsetY, positionz), vector3rotation).gameObject;
 
+        //spawn the bullet on the server at the adjusted position
+        GameObject spawnedObject = Instantiate(this.bullet, new Vector3(positionx + offsetX, positiony - offsetY, positionz), vector3rotation).gameObject;
+
+        //assign bullet ownership
         Bullet bullet = spawnedObject.GetComponent<Bullet>();
         bullet.OwnerClientId = OwnerClientId;
 
+        //set bullet travel direction
         spawnedObject.GetComponent<Bullet>().SetDirection(facingRight ? Vector3.left : Vector3.right);
+
+        //spawn the bullet as a networked object
         spawnedObject.GetComponent<NetworkObject>().Spawn(true);
     }
 
     [ServerRpc]
     private void SubmitNameServerRpc(string name, ServerRpcParams rpcParams = default)
     {
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            name = $"Player_{OwnerClientId}";
-        }
-
         // server stores the name on this player
         playerName = name;
 
@@ -496,7 +548,10 @@ public class playerManager : NetworkBehaviour
     private void RequestRespawnServerRpc(ServerRpcParams rpcParams = default)
     {
         if (!isDead.Value)
-            return; // ignore if somehow not dead
+        {
+            // ignore if somehow not dead
+            return;
+        }
 
         // server chooses spawn position
         Vector3 spawnPos = Vector3.zero;
@@ -509,20 +564,16 @@ public class playerManager : NetworkBehaviour
         isDead.Value = false;
 
         // tell the owner client to move itself
-        RespawnClientRpc(spawnPos, new ClientRpcParams
-        {
-            Send = new ClientRpcSendParams
-            {
-                TargetClientIds = new[] { OwnerClientId }
-            }
-        });
+        RespawnClientRpc(spawnPos, new ClientRpcParams {Send = new ClientRpcSendParams {TargetClientIds = new[] { OwnerClientId }}});
     }
 
     [ClientRpc]
     private void RespawnClientRpc(Vector3 spawnPos, ClientRpcParams clientRpcParams = default)
     {
+        // move player to respawn position
         transform.position = spawnPos;
 
+        // reset player sprite color to fully visible
         if (playerSpriteGO != null)
         {
             var rend = playerSpriteGO.GetComponent<Renderer>();
@@ -549,11 +600,11 @@ public class playerManager : NetworkBehaviour
     [ServerRpc]
     private void PickupShieldServerRpc(ServerRpcParams rpcParams = default)
     {
-        // This runs on the server for this player
+        //this runs on the server for this player
         hasShield = true;
         ShieldSpriteClientRpc(true);   // show shield on everyone
 
-        // Make sure only one timer is running
+        //make sure only one timer is running
         if (shieldCoroutine != null)
         {
             StopCoroutine(shieldCoroutine);
@@ -566,7 +617,9 @@ public class playerManager : NetworkBehaviour
         yield return new WaitForSeconds(10);
 
         hasShield = false;
-        ShieldSpriteClientRpc(false);  // hide shield on everyone
+        
+        //hide shield on everyone
+        ShieldSpriteClientRpc(false);  
     }
 
     [ClientRpc]
@@ -584,14 +637,27 @@ public class playerManager : NetworkBehaviour
     [ClientRpc]
     private void SetInvisibleClientRpc(bool invisible)
     {
+        // exit if no sprite renderer object
         if (playerSpriteGO == null) return;
 
-        var rend = playerSpriteGO.GetComponent<Renderer>();
-        if (rend == null) return;
+        // get renderer and exit if missing
+        Renderer rend = playerSpriteGO.GetComponent<Renderer>();
+        if (rend == null)
+        {
+            return;
+        }
 
-        var c = rend.material.color;
-        c.a = invisible ? 0.25f : 1f;   // 25% visible when invisible, fully visible otherwise
+        // 25% visible when invisible, fully visible otherwise
+        Color c = rend.material.color;
+        if (invisible)
+        { 
+            c.a = 0.25f;
+        }
+        else 
+        { 
+            c.a = 1f;
+        }
+        
         rend.material.color = c;
     }
-
 }

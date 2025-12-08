@@ -2,7 +2,7 @@ using UnityEngine;
 
 public class JoinCodeManager : MonoBehaviour
 {
-    public static JoinCodeManager Instance { get; private set; }
+    public static JoinCodeManager Instance;
 
     public string CurrentJoinCode { get; private set; } = "";
 
@@ -14,13 +14,15 @@ public class JoinCodeManager : MonoBehaviour
             return;
         }
 
+        // assign instance and persist across scenes
         Instance = this;
         DontDestroyOnLoad(gameObject);
     }
 
     public void SetCurrentCode(string code)
     {
+        // update stored relay join code
         CurrentJoinCode = code;
-        Debug.Log($"[JoinCodeManager] Relay join code set to {CurrentJoinCode}");
+        print(code);
     }
 }

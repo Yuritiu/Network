@@ -9,14 +9,16 @@ public class ChatManager : NetworkBehaviour
     [SerializeField] private Text chatLog;
     [SerializeField] private ScrollRect chatScrollRect;
 
-    // UI root object for the chat (scroll view + log)
+    // UI object for the chat (scroll view & log)
     [SerializeField] private GameObject chatContainer;
 
-    // How long before chat auto-hides
+    // How long before chat auto hides
     [SerializeField] private float hideDelay = 4f;
 
     private float hideTimer = 0f;
-    private bool chatVisible = false;   // start hidden
+    
+    // start hidden
+    private bool chatVisible = false;
 
     private void Start()
     {
@@ -39,7 +41,9 @@ public class ChatManager : NetworkBehaviour
     private void Update()
     {
         if (!chatVisible)
+        {
             return;
+        }
 
         if (hideTimer > 0f)
         {
@@ -53,6 +57,7 @@ public class ChatManager : NetworkBehaviour
 
     private void OnDestroy()
     {
+        // remove listeners when object is destroyed to avoid leaks
         if (chatInput != null)
         {
             chatInput.onEndEdit.RemoveListener(OnChatInputEndEdit);
@@ -77,7 +82,7 @@ public class ChatManager : NetworkBehaviour
         chatInput.ActivateInputField();
     }
 
-    // called whenever the text in the input box changes (i.e. user starts typing)
+    // called whenever the text in the input box changes (when user starts typing)
     private void OnChatInputValueChanged(string _)
     {
         ShowChat();
@@ -102,17 +107,16 @@ public class ChatManager : NetworkBehaviour
         {
             chatLog.text += line;
 
-            // Force the content to rebuild so scroll view knows the new height
+            //force the content to rebuild so scroll view knows the new height
             LayoutRebuilder.ForceRebuildLayoutImmediate(chatLog.rectTransform);
 
-            // Auto-scroll to bottom
+            //auto scroll to bottom
             if (chatScrollRect != null)
             {
                 chatScrollRect.verticalNormalizedPosition = 0f;
             }
         }
 
-        Debug.Log($"[Chat] {line}");
         ShowChat();   // chat also appears / refreshes when a message arrives
     }
 
@@ -121,32 +125,39 @@ public class ChatManager : NetworkBehaviour
         if (NetworkManager.Singleton != null &&
             NetworkManager.Singleton.ConnectedClients.TryGetValue(clientId, out var client))
         {
-            playerManager pm = client.PlayerObject.GetComponent<playerManager>();
-            if (pm != null && !string.IsNullOrWhiteSpace(pm.playerName))
+            playerManager playerName = client.PlayerObject.GetComponent<playerManager>();
+
+            if (playerName != null && !string.IsNullOrWhiteSpace(playerName.playerName))
             {
-                return pm.playerName;
+                return playerName.playerName;
             }
         }
 
-        return $"Player_{clientId}";
+        return "Player_" + clientId;
     }
 
     private void ShowChat()
     {
+        // show chat ui container
         if (chatContainer != null)
         {
             chatContainer.SetActive(true);
         }
+
+        // mark chat as visible and reset hide timer
         chatVisible = true;
         hideTimer = hideDelay;
     }
 
     private void HideChat()
     {
+        // hide chat ui container
         if (chatContainer != null)
         {
             chatContainer.SetActive(false);
         }
+
+        // mark chat as hidden
         chatVisible = false;
     }
 }

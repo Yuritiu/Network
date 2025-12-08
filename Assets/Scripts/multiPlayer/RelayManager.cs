@@ -11,64 +11,56 @@ using Unity.Networking.Transport.Relay;
 
 public static class RelayManager
 {
+    // track if unity services have been initialized
     private static bool servicesInitialized = false;
 
     private static async Task EnsureUnityServices()
     {
+        // initialize services 
         if (!servicesInitialized)
         {
             await UnityServices.InitializeAsync();
 
+            // sign in anonymously if not already signed in
             if (!AuthenticationService.Instance.IsSignedIn)
             {
                 await AuthenticationService.Instance.SignInAnonymouslyAsync();
-                Debug.Log($"[Relay] Signed in as player {AuthenticationService.Instance.PlayerId}");
             }
 
+            // mark services as initialized
             servicesInitialized = true;
         }
     }
 
-    /// <summary>
-    /// Create a Relay allocation and start NGO host.
-    /// Returns the Relay join code (string) if successful, null otherwise.
-    /// </summary>
     public static async Task<string> StartHostWithRelayAsync(int maxConnections)
     {
         await EnsureUnityServices();
 
-        // Create allocation on Relay (maxConnections = number of clients that can join)
+        // create a relay allocation for the host
         Allocation allocation = await RelayService.Instance.CreateAllocationAsync(maxConnections);
         string joinCode = await RelayService.Instance.GetJoinCodeAsync(allocation.AllocationId);
 
-        Debug.Log($"[Relay] Host allocation created. Join code: {joinCode}");
+        UnityTransport utp = NetworkManager.Singleton.GetComponent<UnityTransport>();
 
-        // Configure UnityTransport to use Relay
-        var utp = NetworkManager.Singleton.GetComponent<UnityTransport>();
-
-        // "dtls" = secure UDP; "udp" is also allowed but dtls is recommended
+        // build relay server data and assign it to transport
         var serverData = new RelayServerData(allocation, "dtls");
         utp.SetRelayServerData(serverData);
 
+        // start host using relay transport
         bool success = NetworkManager.Singleton.StartHost();
         if (!success)
         {
-            Debug.LogError("[Relay] Failed to start host.");
             return null;
         }
 
         return joinCode;
     }
 
-    /// <summary>
-    /// Join an existing Relay allocation using its join code, and start NGO client.
-    /// Returns true if client started successfully.
-    /// </summary>
     public static async Task<bool> StartClientWithRelayAsync(string joinCode)
     {
+        // make sure unity services and auth are ready
         await EnsureUnityServices();
 
-        Debug.Log($"[Relay] Joining Relay allocation with code: {joinCode}");
 
         // Join allocation
         JoinAllocation joinAllocation = await RelayService.Instance.JoinAllocationAsync(joinCode);
@@ -79,10 +71,6 @@ public static class RelayManager
         utp.SetRelayServerData(serverData);
 
         bool success = NetworkManager.Singleton.StartClient();
-        if (!success)
-        {
-            Debug.LogError("[Relay] Failed to start client.");
-        }
 
         return success;
     }

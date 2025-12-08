@@ -18,36 +18,58 @@ public class MovingPlatform : MonoBehaviour
 
     private void Start()
     {
+        // disable if missing points
         if (pointA == null || pointB == null)
         {
-            Debug.LogError("[MovingPlatform] pointA and pointB must be assigned.");
             enabled = false;
             return;
         }
 
+        // set starting position
         movingToB = startAtA;
-        transform.position = startAtA ? pointA.position : pointB.position;
-        targetPos = movingToB ? pointB.position : pointA.position;
+        if (startAtA)
+        {
+            transform.position = pointA.position;
+        }
+        else
+        {
+            transform.position = pointB.position;
+        }
+     
+        if (movingToB)
+        {
+            targetPos = pointB.position;
+        }
+        else
+        {
+            targetPos = pointA.position;
+        }
     }
 
     private void Update()
     {
+        // wait at ends if enabled
         if (waitAtEnds && waitTimer > 0f)
         {
             waitTimer -= Time.deltaTime;
             return;
         }
 
-        transform.position = Vector3.MoveTowards(
-            transform.position,
-            targetPos,
-            speed * Time.deltaTime
-        );
+        // move toward target
+        transform.position = Vector3.MoveTowards(transform.position, targetPos, speed * Time.deltaTime);
 
+        // reached target
         if (Vector3.Distance(transform.position, targetPos) < 0.01f)
         {
             movingToB = !movingToB;
-            targetPos = movingToB ? pointB.position : pointA.position;
+            if (movingToB)
+            {
+                targetPos = pointB.position;
+            }
+            else
+            {
+                targetPos = pointA.position;
+            }
 
             if (waitAtEnds)
             {

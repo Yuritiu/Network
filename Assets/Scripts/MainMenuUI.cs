@@ -8,10 +8,11 @@ using UnityEngine.UI;
 public class MainMenuUI : MonoBehaviour
 {
     [SerializeField] private string gameSceneName = "Network";
-    [SerializeField] private InputField clientCodeInput; // Input for client to type code
-    [SerializeField] private InputField nameInput;
+    [SerializeField] private InputField clientCodeInput; // input for client to type code
+    [SerializeField] private InputField nameInput; // input for client to type name
+    
     public static string LocalPlayerName = "Player";
-    private const string PlayerNameFileName = "playername.json";
+    private const string PlayerNameFileName = "playername.json"; // file to save name
 
     [System.Serializable]
     private class PlayerNameData
@@ -21,6 +22,7 @@ public class MainMenuUI : MonoBehaviour
 
     private void Start()
     {
+        //checks if name is saved and uses it 
         LoadPlayerName();
     }
 
@@ -29,7 +31,9 @@ public class MainMenuUI : MonoBehaviour
         string path = Path.Combine(Application.persistentDataPath, PlayerNameFileName);
 
         if (!File.Exists(path))
+        {
             return;
+        }
 
         try
         {
@@ -40,7 +44,7 @@ public class MainMenuUI : MonoBehaviour
             {
                 LocalPlayerName = data.playerName;
 
-                // Auto-type it into the input field
+                //types name into the input field
                 if (nameInput != null)
                 {
                     nameInput.text = LocalPlayerName;
@@ -49,7 +53,7 @@ public class MainMenuUI : MonoBehaviour
         }
         catch (System.Exception e)
         {
-            Debug.LogWarning("[MainMenuUI] Failed to load player name: " + e);
+            return;
         }
     }
 
@@ -62,7 +66,9 @@ public class MainMenuUI : MonoBehaviour
         }
         else
         {
-            LocalPlayerName = $"Player_{Random.Range(1000, 9999)}";
+            //generates random name if no name has been set
+            LocalPlayerName = "Player_" + Random.Range(1000, 9999);
+
             SavePlayerName(LocalPlayerName);
         }
     }
@@ -75,108 +81,107 @@ public class MainMenuUI : MonoBehaviour
 
         try
         {
+            //saves name to file
             string json = JsonUtility.ToJson(data, true);
             File.WriteAllText(path, json);
         }
         catch (System.Exception e)
         {
-            Debug.LogWarning("[MainMenuUI] Failed to save player name: " + e);
+            return;
         }
     }
 
     public async void OnHostClicked()
     {
-        NetworkManager nm = NetworkManager.Singleton;
+        NetworkManager networkManager = NetworkManager.Singleton;
 
-        if (nm == null)
+        if (networkManager == null)
         {
-            Debug.LogError("MainMenuUI: No NetworkManager found.");
             return;
         }
 
-        if (nm.IsListening)
+        if (networkManager.IsListening)
         {
-            nm.Shutdown();
+            networkManager.Shutdown();
         }
 
+        //save the name typed out
         SetLocalNameFromInput();
 
         try
         {
-            // Ask Relay to create an allocation and start the host
+            // ask relay to start the host
             string relayJoinCode = await RelayManager.StartHostWithRelayAsync(maxConnections: 3);
 
             if (string.IsNullOrEmpty(relayJoinCode))
             {
-                Debug.LogError("[MainMenuUI] Failed to start host with Relay (join code is null/empty).");
                 return;
             }
 
-            // Store it globally
+            // store join code globally
             if (JoinCodeManager.Instance != null)
             {
                 JoinCodeManager.Instance.SetCurrentCode(relayJoinCode);
             }
 
-            Debug.Log($"[MainMenuUI] Host started with Relay. Join code: {relayJoinCode}");
-
             // Load game scene
-            nm.SceneManager.LoadScene(gameSceneName, LoadSceneMode.Single);
+            networkManager.SceneManager.LoadScene(gameSceneName, LoadSceneMode.Single);
         }
         catch (System.Exception e)
         {
-            Debug.LogError("[MainMenuUI] Exception while starting host with Relay: " + e);
+            return;
         }
     }
 
     public async void OnClientClicked()
     {
-        NetworkManager nm = NetworkManager.Singleton;
-        if (nm == null)
+        NetworkManager networkManager = NetworkManager.Singleton;
+        if (networkManager == null)
         {
-            Debug.LogError("MainMenuUI: No NetworkManager found.");
             return;
         }
 
-        if (nm.IsListening)
+        if (networkManager.IsListening)
         {
-            nm.Shutdown();
+            networkManager.Shutdown();
         }
 
+        //save the name typed out
         SetLocalNameFromInput();
 
-        string code = clientCodeInput != null ? clientCodeInput.text : "";
+        string code;
+
+        if (clientCodeInput != null)
+        {
+            code = clientCodeInput.text;
+        }
+        else
+        {
+            code = "";
+        }
+
+        //ignores captials and spaces
         code = code.Trim().ToUpperInvariant();
 
         if (string.IsNullOrEmpty(code))
         {
-            Debug.LogWarning("[MainMenuUI] No join code entered.");
             return;
         }
         
         try
         {
+            //loads into the game with the code typed
             bool success = await RelayManager.StartClientWithRelayAsync(code);
-
-            if (success)
-            {
-                Debug.Log($"[MainMenuUI] Client started with Relay, join code {code}");
-            }
-            else
-            {
-                Debug.LogError("[MainMenuUI] Failed to start client with Relay.");
-            }
         }
         catch (System.Exception e)
         {
-            Debug.LogError("[MainMenuUI] Exception while starting client with Relay: " + e);
+            return;
         }
     }
 
     public void OnQuitClicked()
     {
-        Debug.Log("[MainMenuUI] Quit pressed.");
-   
+        //leaves game
         Application.Quit();
     }
 }

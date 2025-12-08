@@ -42,26 +42,27 @@ public class LeaderboardUI : MonoBehaviour
         var players = FindObjectsOfType<playerManager>();
 
         // Order by kills descending, then deaths ascending
-        var ordered = players
-            .OrderByDescending(p => p.kills.Value)
-            .ThenBy(p => p.deaths.Value)
-            .ToList();
+        var ordered = players.OrderByDescending(p => p.kills.Value).ThenBy(p => p.deaths.Value).ToList();
 
-        var sb = new StringBuilder();
-        sb.AppendLine("Name             Kills   Deaths");
-        sb.AppendLine("--------------------------------");
+        var stringBuilder = new StringBuilder();
+        stringBuilder.AppendLine("Name             Kills   Deaths");
+        stringBuilder.AppendLine("--------------------------------");
 
-        foreach (var p in ordered)
+        foreach (var player in ordered)
         {
-            string name = !string.IsNullOrWhiteSpace(p.playerName)
-                ? p.playerName
-                : $"Player {p.OwnerClientId}";
+            // use fallback name if player name is empty
+            string name;
 
-            sb.AppendLine(
-                $"{name,-15}  {p.kills.Value,5}   {p.deaths.Value,6}"
-            );
+            if (string.IsNullOrWhiteSpace(player.playerName))
+                name = "Player " + player.OwnerClientId;
+            else
+                name = player.playerName;
+
+            // format and add player row to leaderboard
+            stringBuilder.AppendLine(string.Format("{0,-15}  {1,5}   {2,6}", name, player.kills.Value, player.deaths.Value));
         }
 
-        leaderboardText.text = sb.ToString();
+        // apply the final leaderboard text
+        leaderboardText.text = stringBuilder.ToString();
     }
 }

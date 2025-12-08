@@ -760,7 +760,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  GlobalObjectIdHash: 2454837842
+  GlobalObjectIdHash: 4242737219
   InScenePlacedSourceGlobalObjectIdHash: 0
   AlwaysReplicateAsRoot: 0
   SynchronizeTransform: 1
@@ -784,25 +784,25 @@ MonoBehaviour:
   movementAnimator: {fileID: 2088164525700883611}
   playerSprite: {fileID: 2135931286119333850}
   playerSpriteGO: {fileID: 7469682080638948594}
-  Shield: {fileID: 9089654951339396295}
   nameText: {fileID: 0}
   playerName: Player
-  spawnedObjectTransform: {fileID: 6113770985130114832, guid: 88fb9e4d40003b541a695de8f47df451, type: 3}
   speed: 5
   jumpForce: 6
   maxJumps: 2
   coyoteTime: 0.15
+  deathScreenUI: {fileID: 7863601066416818277}
   score: 0
   health:
     m_InternalValue: 3
   isDead:
     m_InternalValue: 0
-  deathScreenUI: {fileID: 7863601066416818277}
+  bullet: {fileID: 6113770985130114832, guid: 88fb9e4d40003b541a695de8f47df451, type: 3}
   shootCooldown: 1
   kills:
     m_InternalValue: 0
   deaths:
     m_InternalValue: 0
+  Shield: {fileID: 9089654951339396295}
   lowGravityDrag: 0
 --- !u!114 &8170638166095644923
 MonoBehaviour:

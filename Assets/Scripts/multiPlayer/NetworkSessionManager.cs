@@ -4,7 +4,7 @@ using UnityEngine.SceneManagement;
 
 public class NetworkSessionManager : MonoBehaviour
 {
-    public static NetworkSessionManager Instance { get; private set; }
+    public static NetworkSessionManager Instance;
 
     [SerializeField] private string mainMenuSceneName = "MainMenu";
 
@@ -20,7 +20,7 @@ public class NetworkSessionManager : MonoBehaviour
 
         Instance = this;
 
-        // We assume NetworkBootstrap already calls DontDestroyOnLoad on NetworkManager.
+        // NetworkBootstrap should already call DontDestroyOnLoad on NetworkManager.
         // This object lives alongside it.
         DontDestroyOnLoad(gameObject);
 
@@ -32,6 +32,7 @@ public class NetworkSessionManager : MonoBehaviour
 
     private void OnDestroy()
     {
+        // remove disconnect callback to avoid leftover event subscription
         if (NetworkManager.Singleton != null)
         {
             NetworkManager.Singleton.OnClientDisconnectCallback -= OnClientDisconnected;
@@ -40,41 +41,44 @@ public class NetworkSessionManager : MonoBehaviour
 
     public void LeaveGame()
     {
+        // if network does not exist just go to menu
         if (NetworkManager.Singleton == null)
         {
-            // Just go back to menu if no network session
             SceneManager.LoadScene(mainMenuSceneName);
             return;
         }
 
+        // mark that we are intentionally leaving
         quittingToMenu = true;
 
-        // Clear join code, optional
+        // clear stored relay join code
         if (JoinCodeManager.Instance != null)
         {
             JoinCodeManager.Instance.SetCurrentCode("");
         }
 
-        // Shut down NGO (host or client, doesn't matter)
+        // shut down networking before changing scenes
         NetworkManager.Singleton.Shutdown();
 
-        // Return to main menu scene
+        // load main menu scene
         SceneManager.LoadScene(mainMenuSceneName);
     }
 
     private void OnClientDisconnected(ulong clientId)
     {
-        // Ignore callbacks caused by our own explicit LeaveGame
         if (quittingToMenu)
+        {
             return;
+        }
 
         if (NetworkManager.Singleton == null)
+        {
             return;
+        }
 
-        // Only react for *this* client
+        // if local player was disconnected return to main menu
         if (clientId == NetworkManager.Singleton.LocalClientId)
         {
-            Debug.Log("[NetworkSessionManager] Disconnected from host, returning to main menu.");
             SceneManager.LoadScene(mainMenuSceneName);
         }
     }

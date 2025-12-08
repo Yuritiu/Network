@@ -9,11 +9,15 @@ public class PauseMenu : MonoBehaviour
     private void Start()
     {
         if (pausePanel != null)
+        {
+            //disables pause menu
             pausePanel.SetActive(false);
+        }
     }
 
     private void Update()
     {
+        //shows leave button
         if (Input.GetKeyDown(KeyCode.Escape))
         {
             TogglePause();
@@ -24,7 +28,10 @@ public class PauseMenu : MonoBehaviour
     {
         isOpen = !isOpen;
 
+        //enables or disables pause menu (depends on current state)
         if (pausePanel != null)
+        {
             pausePanel.SetActive(isOpen);
+        }
     }
 }

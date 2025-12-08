@@ -6,7 +6,7 @@ public class Gem : MonoBehaviour
 
     private void Start()
     {
-        // Auto-destroy after lifeTime seconds
+        // auto destroy after lifeTime seconds
         Destroy(gameObject, lifeTime);
     }
 
@@ -14,7 +14,7 @@ public class Gem : MonoBehaviour
     {
         if (target.gameObject.CompareTag("Player"))
         {
-            // Destroy immediately on pickup
+            // destroy immediately on pickup
             Destroy(gameObject);
         }
     }

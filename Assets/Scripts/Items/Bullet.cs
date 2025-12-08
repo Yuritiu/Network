@@ -17,15 +17,19 @@ public class Bullet : NetworkBehaviour
 
     public void SetDirection(Vector3 dir)
     {
+        // set normalized travel direction
         moveDirection = dir.normalized;
     }
 
     private void Update()
     {
+        // server only controls bullet movement
         if (!IsServer)
+        {
             return;
+        }
 
-        // lifetime
+        // track lifetime
         lifeTimer += Time.deltaTime;
         if (lifeTimer >= maxLifetime)
         {
@@ -33,7 +37,7 @@ public class Bullet : NetworkBehaviour
             return;
         }
 
-        // move in a straight line
+        // move bullet forward
         if (moveDirection != Vector3.zero)
         {
             transform.position += moveDirection * projectileSpeed * Time.deltaTime;
@@ -42,26 +46,35 @@ public class Bullet : NetworkBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
-        if (!IsServer) return;
-        if (hasHit) return;
+        // server handles collisions
+        if (!IsServer)
+        {
+            return;
+        }
+        // ignore multiple hits
+        if (hasHit)
+        {
+            return;
+        }
 
         hasHit = true;
 
-        // Did we hit a player?
-        var player = other.GetComponentInParent<playerManager>();
+        // check if a player was hit
+        playerManager player = other.GetComponentInParent<playerManager>();
 
+        // apply damage if not self hit
         if (player != null && player.OwnerClientId != OwnerClientId)
         {
-            // just damage, NO knockback
             player.TakeDamage(1, OwnerClientId);
         }
 
-        // Whether it's a player or wall/anything, despawn the bullet
+        // despawn bullet after hit
         ServerDespawn();
     }
 
     private void ServerDespawn()
     {
+        // despawn network object on server
         if (IsServer && TryGetComponent<NetworkObject>(out var netObj))
         {
             netObj.Despawn();

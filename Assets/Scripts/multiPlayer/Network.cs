@@ -5,11 +5,11 @@ public class NetworkBootstrap : MonoBehaviour
 {
     private void Awake()
     {
-        NetworkManager nm = GetComponent<NetworkManager>();
+        NetworkManager networkManager = GetComponent<NetworkManager>();
         
-        if (nm != null)
+        if (networkManager != null)
         {
-            DontDestroyOnLoad(nm.gameObject);
+            DontDestroyOnLoad(networkManager.gameObject);
         }
     }
 }

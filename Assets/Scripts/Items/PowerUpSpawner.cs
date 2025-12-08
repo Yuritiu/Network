@@ -14,36 +14,42 @@ public class PowerUpSpawner : NetworkBehaviour
     {
         base.OnNetworkSpawn();
 
-        // Only the server should drive the spawning logic
         if (!IsServer)
+        {
             return;
+        }
 
+        // reset the spawn timer
         spawnTimer = spawnMaxTimer;
     }
 
     private void Update()
     {
-        // Only server runs the timer / spawns
         if (!IsServer)
+        {
             return;
+        }
 
         spawnTimer += Time.deltaTime;
 
+        // spawn when timer reaches max
         if (spawnTimer >= spawnMaxTimer)
         {
+            // skip spawning if lists are empty
             if (powerUps.Count == 0 || powerUpsSpawnPoints.Count == 0)
             {
-                Debug.LogWarning("PowerUpSpawner: no powerUps or spawn points assigned.");
                 spawnTimer = 0f;
                 return;
             }
 
+            // choose random powerup and spawn point
             int powerUpIndex = Random.Range(0, powerUps.Count);
             int spawnIndex = Random.Range(0, powerUpsSpawnPoints.Count);
 
-            // Tell everyone exactly which powerup + spawn index to use
+            // tell all clients to spawn the powerup visually
             SpawnPowerupClientRpc(powerUpIndex, spawnIndex);
 
+            // reset timer
             spawnTimer = 0f;
         }
     }
@@ -54,22 +60,16 @@ public class PowerUpSpawner : NetworkBehaviour
     {
         if (powerUps.Count == 0 || powerUpsSpawnPoints.Count == 0)
         {
-            Debug.LogWarning("PowerUpSpawner: no powerUps or spawn points assigned.");
             return;
         }
 
-        // Extra safety: clamp indexes (in case of mismatch)
-        if (powerUpIndex < 0 || powerUpIndex >= powerUps.Count ||
-            spawnIndex < 0 || spawnIndex >= powerUpsSpawnPoints.Count)
+        if (powerUpIndex < 0 || powerUpIndex >= powerUps.Count || spawnIndex < 0 || spawnIndex >= powerUpsSpawnPoints.Count)
         {
-            Debug.LogWarning($"PowerUpSpawner: received invalid indices p={powerUpIndex}, s={spawnIndex}");
             return;
         }
 
-        Instantiate(
-            powerUps[powerUpIndex],
-            powerUpsSpawnPoints[spawnIndex].position,
-            powerUps[powerUpIndex].rotation);
+        // spawn the powerup
+        Instantiate(powerUps[powerUpIndex], powerUpsSpawnPoints[spawnIndex].position, powerUps[powerUpIndex].rotation);
     }
 
 }

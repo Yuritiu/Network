@@ -8,9 +8,5 @@ public class LeaveGameButtonHandler : MonoBehaviour
         {
             NetworkSessionManager.Instance.LeaveGame();
         }
-        else
-        {
-            Debug.LogWarning("No NetworkSessionManager instance found when trying to leave game.");
-        }
     }
 }
