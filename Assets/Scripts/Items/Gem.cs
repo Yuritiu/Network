@@ -1,15 +1,20 @@
-using System.Collections;
-using System.Collections.Generic;
-using Unity.Netcode;
 using UnityEngine;
 
-public class Gem : NetworkBehaviour
+public class Gem : MonoBehaviour
 {
+    [SerializeField] private float lifeTime = 10f;
 
-    void OnCollisionEnter(Collision target)
+    private void Start()
     {
-        if (target.gameObject.tag.Equals("Player") == true)
+        // Auto-destroy after lifeTime seconds
+        Destroy(gameObject, lifeTime);
+    }
+
+    private void OnCollisionEnter(Collision target)
+    {
+        if (target.gameObject.CompareTag("Player"))
         {
+            // Destroy immediately on pickup
             Destroy(gameObject);
         }
     }
