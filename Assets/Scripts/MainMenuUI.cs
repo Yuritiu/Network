@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.IO;
+using System.Text;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -10,6 +11,78 @@ public class MainMenuUI : MonoBehaviour
     [SerializeField] private InputField clientCodeInput; // Input for client to type code
     [SerializeField] private InputField nameInput;
     public static string LocalPlayerName = "Player";
+    private const string PlayerNameFileName = "playername.json";
+
+    [System.Serializable]
+    private class PlayerNameData
+    {
+        public string playerName;
+    }
+
+    private void Start()
+    {
+        LoadPlayerName();
+    }
+
+    private void LoadPlayerName()
+    {
+        string path = Path.Combine(Application.persistentDataPath, PlayerNameFileName);
+
+        if (!File.Exists(path))
+            return;
+
+        try
+        {
+            string json = File.ReadAllText(path);
+            PlayerNameData data = JsonUtility.FromJson<PlayerNameData>(json);
+
+            if (data != null && !string.IsNullOrWhiteSpace(data.playerName))
+            {
+                LocalPlayerName = data.playerName;
+
+                // Auto-type it into the input field
+                if (nameInput != null)
+                {
+                    nameInput.text = LocalPlayerName;
+                }
+            }
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogWarning("[MainMenuUI] Failed to load player name: " + e);
+        }
+    }
+
+    private void SetLocalNameFromInput()
+    {
+        if (nameInput != null && !string.IsNullOrWhiteSpace(nameInput.text))
+        {
+            LocalPlayerName = nameInput.text.Trim();
+            SavePlayerName(LocalPlayerName);
+        }
+        else
+        {
+            LocalPlayerName = $"Player_{Random.Range(1000, 9999)}";
+            SavePlayerName(LocalPlayerName);
+        }
+    }
+
+    private void SavePlayerName(string name)
+    {
+        string path = Path.Combine(Application.persistentDataPath, PlayerNameFileName);
+
+        PlayerNameData data = new PlayerNameData { playerName = name };
+
+        try
+        {
+            string json = JsonUtility.ToJson(data, true);
+            File.WriteAllText(path, json);
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogWarning("[MainMenuUI] Failed to save player name: " + e);
+        }
+    }
 
     public async void OnHostClicked()
     {
@@ -97,20 +170,6 @@ public class MainMenuUI : MonoBehaviour
         catch (System.Exception e)
         {
             Debug.LogError("[MainMenuUI] Exception while starting client with Relay: " + e);
-        }
-    }
-
-
-    private void SetLocalNameFromInput()
-    {
-        if (nameInput != null && !string.IsNullOrWhiteSpace(nameInput.text))
-        {
-            LocalPlayerName = nameInput.text;
-        }
-        else
-        {
-            // fallback
-            LocalPlayerName = $"Player_{Random.Range(1000, 9999)}";
         }
     }
 
