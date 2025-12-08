@@ -12,6 +12,8 @@ public class playerManager : NetworkBehaviour
     [SerializeField] private GameObject playerSpriteGO;
     [SerializeField] private GameObject Shield;
 
+    private Coroutine shieldCoroutine;
+
     [SerializeField] private Text nameText;
 
     public string playerName = "Player";
@@ -218,17 +220,16 @@ public class playerManager : NetworkBehaviour
             }
             StartCoroutine(GravityTimer());
         }
-        if (target.gameObject.tag.Equals("Invisibility") == true)
+        if (target.gameObject.tag.Equals("Invisibility") == true && IsOwner)
         {
-            hasInvis = true;
-            playerSpriteGO.GetComponent<Renderer>().material.color = new Color(1, 1, 1, 0.2f);
+            //hasInvis = true;
+            //playerSpriteGO.GetComponent<Renderer>().material.color = new Color(1, 1, 1, 0.2f);
             StartCoroutine(InvisTimer());
+
         }
         if (target.gameObject.tag.Equals("Shield") == true)
         {
-            hasShield = true;
-            ShieldSpriteServerRpc(true);
-            StartCoroutine(ShieldTimer());
+            PickupShieldServerRpc();
         }
     }
 
@@ -243,7 +244,10 @@ public class playerManager : NetworkBehaviour
     }
     IEnumerator InvisTimer()
     {
+        SetInvisibleServerRpc(true);
+
         yield return new WaitForSeconds(5);
+
         hasInvis = false;
         if (lowHealth)
         {
@@ -251,14 +255,8 @@ public class playerManager : NetworkBehaviour
         }
         else
         {
-            playerSpriteGO.GetComponent<Renderer>().material.color = new Color(1, 1, 1, 1);
+            SetInvisibleServerRpc(false);
         }
-    }
-    IEnumerator ShieldTimer()
-    {
-        yield return new WaitForSeconds(10);
-        hasShield = false;
-        ShieldSpriteServerRpc(false);
     }
 
     void OnCollisionStay(Collision collision)
@@ -332,7 +330,7 @@ public class playerManager : NetworkBehaviour
         if (hasShield)
         {
             hasShield = false;
-            ShieldSpriteServerRpc(false);
+            ShieldSpriteClientRpc(false);
             return;
         }
 
@@ -341,7 +339,7 @@ public class playerManager : NetworkBehaviour
 
         if (health.Value == 1)
         {
-            LowHealthServerRpc();
+            LowHealthClientRpc();
             lowHealth = true;
         }
 
@@ -409,6 +407,12 @@ public class playerManager : NetworkBehaviour
             if (playerSpriteGO != null)
             {
                 playerSpriteGO.SetActive(true);
+                
+                var rend = playerSpriteGO.GetComponent<Renderer>();
+                if (rend != null)
+                {
+                    rend.material.color = new Color(1f, 1f, 1f, 1f);
+                }
             }
             lowHealth = false;
         }
@@ -543,9 +547,26 @@ public class playerManager : NetworkBehaviour
     }
 
     [ServerRpc]
-    private void ShieldSpriteServerRpc(bool isActive)
+    private void PickupShieldServerRpc(ServerRpcParams rpcParams = default)
     {
-        ShieldSpriteClientRpc(isActive);
+        // This runs on the server for this player
+        hasShield = true;
+        ShieldSpriteClientRpc(true);   // show shield on everyone
+
+        // Make sure only one timer is running
+        if (shieldCoroutine != null)
+        {
+            StopCoroutine(shieldCoroutine);
+        }
+        shieldCoroutine = StartCoroutine(ShieldTimerServer());
+    }
+
+    private IEnumerator ShieldTimerServer()
+    {
+        yield return new WaitForSeconds(10);
+
+        hasShield = false;
+        ShieldSpriteClientRpc(false);  // hide shield on everyone
     }
 
     [ClientRpc]
@@ -553,4 +574,24 @@ public class playerManager : NetworkBehaviour
     {
         Shield.SetActive(isActive);
     }
+
+    [ServerRpc]
+    private void SetInvisibleServerRpc(bool invisible)
+    {
+        SetInvisibleClientRpc(invisible);
+    }
+
+    [ClientRpc]
+    private void SetInvisibleClientRpc(bool invisible)
+    {
+        if (playerSpriteGO == null) return;
+
+        var rend = playerSpriteGO.GetComponent<Renderer>();
+        if (rend == null) return;
+
+        var c = rend.material.color;
+        c.a = invisible ? 0.25f : 1f;   // 25% visible when invisible, fully visible otherwise
+        rend.material.color = c;
+    }
+
 }
